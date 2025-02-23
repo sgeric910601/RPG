@@ -221,16 +221,51 @@ body {
     width: 100%;
 }
 
-/* 錯誤訊息 */
-.error-message {
-    background: #FF6B6B;
-    color: white;
+/* 系統訊息 */
+.system-message {
     padding: 10px;
     border-radius: var(--border-radius);
     position: fixed;
     top: 20px;
     right: 20px;
     z-index: 1000;
+    animation: fadeInOut 3s ease-in-out;
+}
+
+.error-message {
+    background: #FF6B6B;
+    color: white;
+}
+
+.info-message {
+    background: #4CAF50;
+    color: white;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-20px); }
+    10% { opacity: 1; transform: translateY(0); }
+    90% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-20px); }
+}
+
+/* 保存指示器 */
+.save-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    display: none;
+    z-index: 1000;
+}
+
+.save-indicator.visible {
+    display: block;
+    animation: fadeIn 0.3s ease-in-out;
 }
 
 /* 無障礙支援 */

@@ -91,6 +91,19 @@ async function loadGameState(story = null) {
                 showCharacterSelection(characters);
             }
         }
+        
+        // 載入並顯示歷史對話
+        dialogueHistory = [];  // 清空當前對話歷史
+        const storyResponse = await fetch('/api/load_story');
+        const storyData = await storyResponse.json();
+        
+        if (storyData.status === 'success' && storyData.dialogue_history) {
+            // 顯示所有歷史對話
+            storyData.dialogue_history.forEach(entry => {
+                showMessage(entry.content, entry.speaker !== 'user');
+            });
+            dialogueHistory = storyData.dialogue_history;
+        }
     } catch (error) {
         console.error('載入遊戲狀態失敗:', error);
         showError('載入遊戲狀態失敗');
@@ -137,7 +150,7 @@ function showInitialDialog() {
     showChoices(initialChoices, '請選擇遊戲世界觀');
 }
 
-// 顯示對話氣泡
+    // 顯示對話氣泡
 function showMessage(message, isCharacter = false) {
     const bubble = document.createElement('div');
     bubble.className = `dialogue-bubble ${isCharacter ? 'character' : 'player'}`;
@@ -148,10 +161,41 @@ function showMessage(message, isCharacter = false) {
     dialogueContainer.scrollTop = dialogueContainer.scrollHeight;
     
     // 保存對話歷史
-    dialogueHistory.push({
-        speaker: isCharacter ? currentCharacter?.name : 'player',
-        message: message
-    });
+    const historyEntry = {
+        speaker: isCharacter ? currentCharacter?.name : 'user',
+        content: message
+    };
+    dialogueHistory.push(historyEntry);
+
+    // 保存並顯示狀態
+    saveGameState();
+}
+
+// 保存遊戲狀態
+async function saveGameState() {
+    const saveIndicator = document.querySelector('.save-indicator');
+    saveIndicator.classList.add('visible');
+
+    try {
+        const response = await fetch('/api/save_story', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('保存失敗');
+        }
+
+        setTimeout(() => {
+            saveIndicator.classList.remove('visible');
+        }, 2000);
+    } catch (error) {
+        console.error('保存遊戲狀態失敗:', error);
+        showError('保存對話失敗');
+        saveIndicator.classList.remove('visible');
+    }
 }
 
 // 顯示選項

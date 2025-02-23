@@ -166,7 +166,8 @@ def load_story():
         if story:
             return jsonify({
                 'status': 'success',
-                'story': story.to_dict()
+                'story': story.to_dict(),
+                'dialogue_history': story_controller.dialogue_history
             })
         return jsonify({
             'status': 'error',

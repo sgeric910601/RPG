@@ -159,7 +159,12 @@ class StoryController:
             
         os.makedirs('data/stories', exist_ok=True)
         
-        story_data = self.current_story.to_dict()
+        # 保存故事數據
+        story_data = {
+            'story': self.current_story.to_dict(),
+            'dialogue_history': self.dialogue_history
+        }
+        
         with open('data/stories/current_story.json', 'w', 
                  encoding='utf-8') as f:
             json.dump(story_data, f, ensure_ascii=False, indent=2)
@@ -169,8 +174,15 @@ class StoryController:
         try:
             with open('data/stories/current_story.json', 'r', 
                      encoding='utf-8') as f:
-                story_data = json.load(f)
+                data = json.load(f)
+                
+                # 載入故事數據
+                story_data = data.get('story', {})
                 self.current_story = Story.from_dict(story_data)
+                
+                # 載入對話歷史
+                self.dialogue_history = data.get('dialogue_history', [])
+                
                 return self.current_story
         except FileNotFoundError:
             return None
