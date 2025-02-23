@@ -1,0 +1,40 @@
+{
+    "models": {
+        "gpt4": {
+            "name": "GPT-4",
+            "api_type": "openai",
+            "enabled": true
+        },
+        "claude2": {
+            "name": "Claude-2",
+            "api_type": "anthropic",
+            "enabled": true
+        }
+    },
+    "default_settings": {
+        "language": "zh-TW",
+        "theme": {
+            "primary_color": "#FF69B4",
+            "secondary_color": "#9370DB",
+            "background_color": "#FAFAFA",
+            "text_color": "#333333"
+        }
+    },
+    "character_templates": {
+        "tsundere": {
+            "name": "傲嬌",
+            "personality": "外表高冷但內心溫柔",
+            "dialogue_style": "說話經常口是心非"
+        },
+        "gentle": {
+            "name": "溫柔",
+            "personality": "善解人意且充滿愛心",
+            "dialogue_style": "說話輕聲細語且富有同理心"
+        },
+        "playful": {
+            "name": "活潑",
+            "personality": "開朗活潑且愛開玩笑",
+            "dialogue_style": "說話充滿活力和笑點"
+        }
+    }
+}

@@ -1,0 +1,248 @@
+/* CSS變量 */
+:root {
+    --primary-color: #FF69B4;
+    --secondary-color: #9370DB;
+    --background-color: #FAFAFA;
+    --text-color: #333333;
+    --border-color: #E0E0E0;
+    --card-background: #FFFFFF;
+    --border-radius: 15px;
+    --spacing: 20px;
+}
+
+/* 基礎重置 */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+/* 基礎樣式 */
+body {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    font-family: 'Noto Sans TC', sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+/* 遊戲容器 */
+.game-container {
+    max-width: 1440px;
+    min-height: 100vh;
+    padding: var(--spacing);
+    margin: 0 auto;
+}
+
+/* 導航欄 */
+.navbar {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing);
+    padding: 1rem;
+}
+
+.navbar-brand {
+    color: var(--primary-color);
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.btn-settings {
+    background-color: transparent;
+    border: 1px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 0.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.btn-settings:hover {
+    background-color: var(--primary-color);
+    color: var(--card-background);
+}
+
+/* 遊戲區域 */
+.game-area {
+    min-height: calc(100vh - 100px);
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    display: flex;
+}
+
+/* 角色區域 */
+.character-portrait {
+    width: 300px;
+    padding: var(--spacing);
+    border-right: 1px solid var(--border-color);
+}
+
+.character-image {
+    width: 100%;
+    height: 70vh;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+}
+
+.character-info {
+    margin-top: var(--spacing);
+    text-align: center;
+}
+
+.character-name {
+    color: var(--primary-color);
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.affection-meter {
+    color: var(--primary-color);
+    font-size: 1.5rem;
+}
+
+/* 對話區域 */
+.dialogue-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: var(--spacing);
+    max-width: 50%;
+}
+
+.dialogue-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--spacing);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: var(--spacing);
+}
+
+.dialogue-bubble {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 15px;
+    margin: 10px 0;
+}
+
+.dialogue-bubble.character {
+    background: var(--primary-color);
+    color: var(--card-background);
+    margin-left: auto;
+    max-width: 80%;
+}
+
+.dialogue-bubble.player {
+    background: var(--secondary-color);
+    color: var(--card-background);
+    margin-right: auto;
+    max-width: 80%;
+}
+
+/* 選項容器 */
+.choice-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.choice-button {
+    background: var(--card-background);
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    padding: 10px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.choice-button:hover {
+    background: var(--primary-color);
+    color: var(--card-background);
+}
+
+/* 互動面板 */
+.interaction-panel {
+    width: 300px;
+    padding: var(--spacing);
+    border-left: 1px solid var(--border-color);
+}
+
+.character-stats {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: var(--spacing);
+}
+
+/* 模態框 */
+.modal-content {
+    background: var(--card-background);
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--border-color);
+    padding: var(--spacing);
+}
+
+.modal-body {
+    padding: var(--spacing);
+}
+
+.modal-footer {
+    border-top: 1px solid var(--border-color);
+    padding: var(--spacing);
+}
+
+.setting-item {
+    margin-bottom: var(--spacing);
+}
+
+/* 表單元素 */
+.form-control {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    width: 100%;
+}
+
+.form-select {
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 8px;
+    width: 100%;
+}
+
+/* 錯誤訊息 */
+.error-message {
+    background: #FF6B6B;
+    color: white;
+    padding: 10px;
+    border-radius: var(--border-radius);
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+/* 無障礙支援 */
+@media (forced-colors: active) {
+    .btn-settings,
+    .choice-button,
+    .dialogue-bubble {
+        border: 1px solid currentColor;
+    }
+    
+    .dialogue-bubble.character,
+    .dialogue-bubble.player {
+        border: 2px solid currentColor;
+    }
+}
