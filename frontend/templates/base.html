@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}AI RPG{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+
+    <!-- 全局配置 -->
+    <script>
+        window.SERVER_CONFIG = {
+            host: '{{ request.host.split(":")[0] }}',
+            port: {{ request.host.split(":")[1] if ":" in request.host else 5000 }},
+            debug: {{ config.DEBUG|tojson }},
+            version: '1.0.0'
+        };
+    </script>
+    <!-- 第三方庫 -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- 核心模組 -->
+    <script type="module" src="{{ url_for('static', filename='js/core/socket.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/core/state.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/core/events.js') }}"></script>
+    <!-- Components JS -->
+    <script type="module" src="{{ url_for('static', filename='js/components/character.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/components/dialogue.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/components/modals.js') }}"></script>
+    <!-- Main JS -->
+    <script type="module" src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block extra_js %}{% endblock %}
+
+    <!-- 保存指示器 -->
+    <div class="save-indicator">自動保存中...</div>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!-- 設定模態框 -->
+<div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="settingsModalLabel">設定</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="settingsForm">
+                    <div class="settings-container">
+                        <div class="setting-item">
+                            <label for="modelSelect" class="form-label">AI模型選擇</label>
+                            <select class="form-select" id="modelSelect" name="aiModel">
+                                <option value="gpt4">GPT-4</option>
+                                <option value="claude2">Claude-2</option>
+                            </select>
+                        </div>
+                        <div class="setting-item">
+                            <label for="themeColor" class="form-label">主題顏色</label>
+                            <input type="color" class="form-control" id="themeColor" name="themeColor" value="#FF69B4">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary" data-action="handleSettingsSave">儲存設定</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 角色管理模態框 -->
+<div class="modal fade" id="characterModal" tabindex="-1" aria-labelledby="characterModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="characterModalLabel">角色管理</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="character-list">
+                    <!-- 角色列表將通過JS動態生成 -->
+                </div>
+                <div class="character-create">
+                    <button class="btn btn-primary mt-3" data-action="createCharacter">
+                        <i class="fas fa-plus"></i> 創建新角色
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 聊天記錄模態框 -->
+<div class="modal fade" id="chatHistoryModal" tabindex="-1" aria-labelledby="chatHistoryModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="chatHistoryModalLabel">聊天記錄</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="chat-sessions">
+                    <!-- 聊天室列表將通過JS動態生成 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 世界觀設定模態框 -->
+<div class="modal fade" id="worldSettingModal" tabindex="-1" aria-labelledby="worldSettingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="worldSettingModalLabel">世界觀與劇情設定</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="worldSettingForm">
+                    <div class="world-templates mb-4">
+                        <h6>選擇預設世界</h6>
+                        <div class="template-list">
+                            <!-- 世界觀模板將通過JS動態生成 -->
+                        </div>
+                    </div>
+                    <div class="custom-world mb-4">
+                        <h6>自訂世界觀</h6>
+                        <div class="mb-3">
+                            <label for="worldName" class="form-label">世界名稱</label>
+                            <input type="text" class="form-control" id="worldName" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="worldDescription" class="form-label">世界觀描述</label>
+                            <textarea class="form-control" id="worldDescription" name="description" rows="4" required></textarea>
+                        </div>
+                    </div>
+                    <div class="story-settings">
+                        <h6>劇情設定</h6>
+                        <div class="mb-3">
+                            <label for="storyBackground" class="form-label">故事背景</label>
+                            <textarea class="form-control" id="storyBackground" name="background" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="storyThemes" class="form-label">主題標籤</label>
+                            <input type="text" class="form-control" id="storyThemes" name="themes" 
+                                   placeholder="輸入標籤，用逗號分隔" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary" data-action="handleWorldSettingSave">保存設定</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

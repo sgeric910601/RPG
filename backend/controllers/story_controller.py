@@ -15,6 +15,7 @@ class StoryController:
         self.ai_handler = ai_handler
         self.current_story: Optional[Story] = None
         self.dialogue_history: List[Dict] = []
+        self.current_session_id: Optional[str] = None
         self._ensure_data_directories()
         self.story_templates = self._load_story_templates()
         self.default_characters = self._load_default_characters()
@@ -24,6 +25,7 @@ class StoryController:
         directories = [
             'data/stories',
             'data/characters',
+            'data/chat_history',
             'frontend/static/images/characters'
         ]
         for directory in directories:
@@ -102,10 +104,15 @@ class StoryController:
         if not self.current_story:
             raise ValueError("沒有活躍的故事")
             
+        # 初始化新的聊天會話
+        if not self.current_session_id:
+            self.current_session_id = self._create_new_chat_session(current_character)
+            
         # 更新對話歷史
         self.dialogue_history.append({
             'speaker': 'user',
-            'content': user_input
+            'content': user_input,
+            'timestamp': self._get_timestamp()
         })
         
         # 獲取當前角色
@@ -131,8 +138,12 @@ class StoryController:
         # 更新對話歷史
         self.dialogue_history.append({
             'speaker': current_character,
-            'content': response
+            'content': response,
+            'timestamp': self._get_timestamp()
         })
+        
+        # 保存聊天記錄
+        self._save_chat_session()
         
         return response, choices
         
@@ -162,7 +173,8 @@ class StoryController:
         # 保存故事數據
         story_data = {
             'story': self.current_story.to_dict(),
-            'dialogue_history': self.dialogue_history
+            'dialogue_history': self.dialogue_history,
+            'current_session_id': self.current_session_id
         }
         
         with open('data/stories/current_story.json', 'w', 
@@ -183,6 +195,62 @@ class StoryController:
                 # 載入對話歷史
                 self.dialogue_history = data.get('dialogue_history', [])
                 
+                # 載入當前會話ID
+                self.current_session_id = data.get('current_session_id')
+                
                 return self.current_story
         except FileNotFoundError:
             return None
+            
+    def _create_new_chat_session(self, character_name: str) -> str:
+        """創建新的聊天會話."""
+        import uuid
+        session_id = str(uuid.uuid4())
+        
+        session_data = {
+            'id': session_id,
+            'character_name': character_name,
+            'world_name': self.current_story.setting,
+            'timestamp': self._get_timestamp(),
+            'dialogue_history': [],
+            'story_context': self.current_story.to_dict()
+        }
+        
+        # 保存新會話
+        self._save_chat_session_data(session_id, session_data)
+        
+        return session_id
+        
+    def _save_chat_session(self) -> None:
+        """保存當前聊天會話."""
+        if not self.current_session_id or not self.current_story:
+            return
+            
+        # 獲取現有會話數據
+        file_path = os.path.join('data', 'chat_history', f'{self.current_session_id}.json')
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                session_data = json.load(f)
+        except FileNotFoundError:
+            return
+            
+        # 更新會話數據
+        session_data['dialogue_history'] = self.dialogue_history
+        session_data['last_message'] = self.dialogue_history[-1]['content'] if self.dialogue_history else ''
+        session_data['timestamp'] = self._get_timestamp()
+        
+        # 保存更新後的數據
+        self._save_chat_session_data(self.current_session_id, session_data)
+        
+    def _save_chat_session_data(self, session_id: str, data: Dict) -> None:
+        """保存聊天會話數據到文件."""
+        os.makedirs('data/chat_history', exist_ok=True)
+        file_path = os.path.join('data', 'chat_history', f'{session_id}.json')
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            
+    def _get_timestamp(self) -> str:
+        """獲取當前時間戳."""
+        from datetime import datetime
+        return datetime.now().isoformat()

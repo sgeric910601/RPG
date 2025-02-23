@@ -71,6 +71,27 @@ def get_characters():
         'characters': characters
     })
 
+@app.route('/api/characters/<character_name>', methods=['GET'])
+def get_character(character_name):
+    """獲取特定角色信息."""
+    try:
+        if not story_controller.current_story:
+            raise ValueError("沒有活躍的故事")
+            
+        character = story_controller.current_story.characters.get(character_name)
+        if not character:
+            raise ValueError(f"找不到角色: {character_name}")
+            
+        return jsonify({
+            'status': 'success',
+            'character': character.to_dict()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 404
+
 @app.route('/api/characters', methods=['POST'])
 def add_character():
     """添加新角色."""
@@ -158,6 +179,118 @@ def get_templates():
             'message': str(e)
         }), 400
 
+@app.route('/api/chat_history', methods=['GET'])
+def get_chat_history():
+    """獲取聊天記錄列表."""
+    try:
+        # 從資料目錄讀取所有聊天記錄
+        history_path = os.path.join('data', 'chat_history')
+        if not os.path.exists(history_path):
+            os.makedirs(history_path)
+            
+        sessions = []
+        for filename in os.listdir(history_path):
+            if filename.endswith('.json'):
+                with open(os.path.join(history_path, filename), 'r', encoding='utf-8') as f:
+                    session = json.load(f)
+                    sessions.append({
+                        'id': session.get('id'),
+                        'character_name': session.get('character_name'),
+                        'world_name': session.get('world_name'),
+                        'last_message': session.get('last_message'),
+                        'timestamp': session.get('timestamp')
+                    })
+                    
+        return jsonify({
+            'status': 'success',
+            'sessions': sorted(sessions, key=lambda x: x['timestamp'], reverse=True)
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
+@app.route('/api/chat_history/<session_id>', methods=['GET'])
+def get_chat_session(session_id):
+    """獲取特定聊天記錄的詳細內容."""
+    try:
+        file_path = os.path.join('data', 'chat_history', f'{session_id}.json')
+        if not os.path.exists(file_path):
+            return jsonify({
+                'status': 'error',
+                'message': '找不到指定的聊天記錄'
+            }), 404
+            
+        with open(file_path, 'r', encoding='utf-8') as f:
+            session = json.load(f)
+            
+        return jsonify({
+            'status': 'success',
+            'session': session
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
+@app.route('/api/world_templates', methods=['GET'])
+def get_world_templates():
+    """獲取世界觀模板列表."""
+    try:
+        with open('data/stories/story_templates.json', 'r', encoding='utf-8') as f:
+            templates = json.load(f)
+            formatted_templates = []
+            for key, template in templates.items():
+                formatted_templates.append({
+                    'id': key,
+                    'name': template['setting'],
+                    'description': template['background'],
+                    'tags': template['themes']
+                })
+                
+        return jsonify({
+            'status': 'success',
+            'templates': formatted_templates
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
+@app.route('/api/world_templates', methods=['POST'])
+def create_world_template():
+    """創建新的世界觀模板."""
+    try:
+        template_data = request.json
+        template = {
+            'setting': template_data['name'],
+            'background': template_data['description'],
+            'themes': template_data['tags'],
+            'scenes': {
+                'introduction': '故事的開始'
+            }
+        }
+        
+        with open('data/stories/story_templates.json', 'r+', encoding='utf-8') as f:
+            templates = json.load(f)
+            templates[template_data['id']] = template
+            f.seek(0)
+            json.dump(templates, f, ensure_ascii=False, indent=4)
+            f.truncate()
+            
+        return jsonify({
+            'status': 'success',
+            'template': template
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
+
 @app.route('/api/load_story', methods=['GET'])
 def load_story():
     """載入已保存的故事."""
@@ -180,4 +313,7 @@ def load_story():
         }), 400
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    host = os.getenv('HOST', '0.0.0.0')  # 默認監聽所有網卡
+    port = int(os.getenv('PORT', 5000))  # 默認端口 5000
+    debug = os.getenv('DEBUG', 'True').lower() == 'true'  # 默認開啟調試模式
+    socketio.run(app, host=host, port=port, debug=debug)

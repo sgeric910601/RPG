@@ -1,0 +1,91 @@
+/* 角色立繪區域 */
+.character-portrait {
+    position: relative;
+    height: 100%;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.character-image {
+    flex: 1;
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    border-radius: 10px;
+    min-height: 300px;
+}
+
+.character-info {
+    margin-top: 1rem;
+    text-align: center;
+}
+
+.character-name {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* 好感度顯示 */
+.affection-meter {
+    text-align: center;
+    margin: 0.5rem 0;
+}
+
+.hearts {
+    display: inline-block;
+}
+
+.hearts .fa-heart {
+    color: #ddd;
+    margin: 0 2px;
+    transition: color 0.3s ease;
+}
+
+.hearts .fa-heart.filled {
+    color: #ff4d6d;
+}
+
+/* 角色管理列表 */
+.character-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    padding: 1rem;
+}
+
+.character-card {
+    border: 1px solid var(--theme-color);
+    border-radius: 10px;
+    padding: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.character-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.character-avatar {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    border-radius: 50%;
+    background-size: cover;
+    background-position: center;
+    border: 2px solid var(--theme-color);
+}
+
+/* 角色統計面板 */
+.character-stats {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 1rem;
+}
+
+.stat-item {
+    margin: 0.5rem 0;
+    display: flex;
+    justify-content: space-between;
+}

@@ -1,0 +1,35 @@
+/* 遊戲特定樣式 */
+.game-container {
+    opacity: 0;
+    animation: fadeIn 0.5s ease forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* 遊戲區域佈局 */
+.game-area {
+    display: flex;
+    height: calc(100vh - 60px);
+}
+
+/* 移動設備適配 */
+@media (max-width: 768px) {
+    .game-area {
+        flex-direction: column;
+    }
+
+    .character-portrait {
+        height: 200px;
+    }
+
+    .dialogue-area {
+        height: calc(100vh - 320px);
+    }
+
+    .interaction-panel {
+        height: 120px;
+    }
+}
