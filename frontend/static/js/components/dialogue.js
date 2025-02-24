@@ -19,6 +19,26 @@ class DialogueManager {
      * 初始化事件監聽
      */
     initEventListeners() {
+        // 初始化消息表單
+        this.messageForm = document.getElementById('message-form');
+        this.messageInput = document.getElementById('message-input');
+        
+        if (this.messageForm) {
+            this.messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const message = this.messageInput.value.trim();
+                if (message) {
+                    const currentCharacter = gameState.get('currentCharacter');
+                    // 確保只發送角色ID而不是整個角色對象
+                    socketManager.send('send_message', {
+                        message: message,
+                        character: currentCharacter?.name || currentCharacter
+                    });
+                    this.messageInput.value = '';
+                }
+            });
+        }
+
         // 訂閱對話狀態變化
         gameState.subscribe('dialogue.messages', (messages) => {
             if (messages) {
@@ -31,17 +51,29 @@ class DialogueManager {
         });
 
         // 處理來自伺服器的對話更新
-        socketManager.on('dialogue:message', (data) => {
-            this.handleNewMessage(data);
-        });
-
-        socketManager.on('dialogue:choices', (data) => {
-            this.handleNewChoices(data);
+        socketManager.on('receive_message', (data) => {
+            if (data.status === 'success') {
+                this.handleNewMessage({
+                    type: 'text',
+                    speaker: data.character.name,
+                    speakerName: data.character.name,
+                    content: data.message
+                });
+                if (data.choices && data.choices.length > 0) {
+                    this.handleNewChoices(data.choices);
+                }
+            } else {
+                console.error(data.message);
+            }
         });
 
         // 處理選項選擇
-        eventManager.on('dialogue:choice', ({ choiceId }) => {
-            this.handleChoiceSelection(choiceId);
+        this.choiceContainer?.addEventListener('click', (e) => {
+            const button = e.target.closest('.choice');
+            if (button && !button.disabled) {
+                const choiceId = button.dataset.choiceId;
+                this.handleChoiceSelection(choiceId);
+            }
         });
     }
 
@@ -218,7 +250,10 @@ class DialogueManager {
         });
 
         // 發送選擇到服務器
-        socketManager.send('dialogue:choice', { choiceId });
+        socketManager.send('send_message', { 
+            message: choiceId,
+            character: gameState.get('currentCharacter')?.name || gameState.get('currentCharacter')
+        });
     }
 
     /**

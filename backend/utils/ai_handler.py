@@ -35,12 +35,21 @@ class AIHandler:
         try:
             # 根據不同模型調用不同的API
             if 'gpt' in self.current_model:
-                return self._call_openai(prompt)
+                print(f"使用OpenAI模型: {self.current_model}")
+                response = self._call_openai(prompt)
+                print(f"OpenAI回應: {response}")
+                return response
             elif 'claude' in self.current_model:
-                return self._call_anthropic(prompt)
+                print(f"使用Claude模型: {self.current_model}")
+                response = self._call_anthropic(prompt)
+                print(f"Claude回應: {response}")
+                return response
             else:
                 raise ValueError(f"不支援的模型: {self.current_model}")
         except Exception as e:
+            print(f"生成回應時發生錯誤: {str(e)}")
+            import traceback
+            print(traceback.format_exc())
             return f"AI回應生成失敗: {str(e)}"
     
     def generate_choices(self, character: Character, 
@@ -55,7 +64,7 @@ class AIHandler:
 故事背景: {story_context.background}
 當前場景: {story_context.current_scene}
 
-生成格式：
+Format:
 - 選項1
 - 選項2
 - 選項3
@@ -124,9 +133,8 @@ class AIHandler:
         if not self.openai_api_key:
             raise ValueError("未設置OpenAI API密鑰")
             
-        openai.api_key = self.openai_api_key
-        
-        response = openai.ChatCompletion.create(
+        client = openai.OpenAI(api_key=self.openai_api_key)
+        response = client.chat.completions.create(
             model=self.current_model,
             messages=[
                 {"role": "system", "content": "You are an AI RPG character."},
@@ -136,7 +144,10 @@ class AIHandler:
             max_tokens=self.max_tokens
         )
         
-        return response.choices[0].message.content.strip()
+        if hasattr(response.choices[0].message, 'content'):
+            return response.choices[0].message.content.strip()
+        else:
+            raise ValueError("無法從API響應中獲取內容")
     
     def _call_anthropic(self, prompt: str) -> str:
         """調用Anthropic API."""
@@ -165,24 +176,44 @@ class AIHandler:
             
     def _generate_test_response(self, prompt: str) -> str:
         """生成測試響應."""
+        print(f"[測試模式] 接收到提示: {prompt}")
+        
         # 檢查是否包含用戶輸入
         if "用戶:" in prompt:
-            return "你好！我很高興見到你。我們可以聊聊天嗎？"
+            response = {
+                "你好": "哈囉！很高興見到你。我是Yuki，雖然看起來很酷，但其實我很想和你聊天呢...",
+                "在嗎": "嗯...我一直都在這裡啊，只是...不太會主動說話而已...",
+                "名字": "我叫Yuki...雖然這個名字聽起來很冷，但我其實不是那麼難相處的...",
+            }
+            
+            for key, value in response.items():
+                if key in prompt.lower():
+                    print(f"[測試模式] 匹配關鍵詞'{key}', 返回: {value}")
+                    return value
+                    
+            default_response = "嗯...（偷偷看了你一眼）要不要聊聊天？"
+            print(f"[測試模式] 使用預設回應: {default_response}")
+            return default_response
             
         # 生成對話選項
         if "生成3-4個對話選項" in prompt:
-            return """
-- 當然可以，我很樂意和你聊天
-- 你想知道更多關於我的事嗎？
-- 這裡的環境真不錯呢
+            choices = """
+- 當然可以！雖然有點害羞，但我很想更了解你呢...
+- 你平常都喜歡做什麼？我也想知道你的興趣
+- 這裡的氛圍真不錯呢，讓人感覺很放鬆
+- 其實...我一直都很想找人聊天的說
 """
+            print(f"[測試模式] 生成選項: {choices}")
+            return choices
         
         # 預設回應
         responses = [
-            "嗯...這是個有趣的話題呢",
-            "原來如此，請繼續說下去",
-            "確實是這樣呢",
-            "我完全理解你的想法"
+            "（輕輕點頭）嗯...這個話題很有趣呢",
+            "（露出感興趣的表情）原來如此，能說得更詳細一點嗎？",
+            "（微笑）雖然我不太會表達，但我真的很認同你的想法",
+            "（眼神閃爍）那個...我也有類似的想法呢..."
         ]
         import random
-        return random.choice(responses)
+        response = random.choice(responses)
+        print(f"[測試模式] 隨機回應: {response}")
+        return response

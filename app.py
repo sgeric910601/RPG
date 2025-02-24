@@ -17,10 +17,23 @@ load_dotenv()
 app = Flask(__name__, 
     template_folder='frontend/templates',
     static_folder='frontend/static')
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 # 配置
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev_key')
+app.config['PORT'] = int(os.getenv('PORT', 5000))
+app.config['DEBUG'] = os.getenv('DEBUG', 'True').lower() == 'true'
+
+# Socket.IO 配置
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',
+    ping_timeout=60,
+    ping_interval=25,
+    always_connect=True,
+    logger=True,
+    engineio_logger=True
+)
 
 # 初始化AI處理器和故事控制器
 ai_handler = AIHandler()
@@ -29,7 +42,11 @@ story_controller = StoryController(ai_handler)
 @app.route('/')
 def index():
     """渲染主頁面."""
-    return render_template('index.html')
+    server_config = {
+        'host': os.getenv('HOST', '0.0.0.0'),
+        'port': int(os.getenv('PORT', 5000))
+    }
+    return render_template('index.html', server_config=server_config)
 
 @app.route('/api/init_story', methods=['POST'])
 def init_story():
@@ -115,23 +132,32 @@ def handle_message(data):
         if not story_controller.current_story:
             raise ValueError("沒有活躍的故事")
             
-        if not data.get('character'):
+        character_name = data.get('character')
+        if not character_name:
             raise ValueError("未指定角色")
+            
+        # 確保character是字符串類型的名稱
+        if isinstance(character_name, dict):
+            character_name = character_name.get('name')
+            
+        if not character_name:
+            raise ValueError("無效的角色名稱")
             
         response, choices = story_controller.process_user_input(
             user_input=data['message'],
-            current_character=data['character']
+            current_character=character_name
         )
         
         # 獲取更新後的角色資料
-        character = story_controller.current_story.characters.get(data['character'])
+        character = story_controller.current_story.characters.get(character_name)
         if not character:
-            raise ValueError(f"找不到角色: {data['character']}")
-        
+            raise ValueError(f"找不到角色: {character_name}")
+            
+        character_dict = character.to_dict()
         socketio.emit('receive_message', {
             'status': 'success',
             'message': response,
-            'character': character.to_dict(),
+            'character': character_dict,
             'choices': choices
         })
     except Exception as e:

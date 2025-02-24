@@ -101,11 +101,17 @@ class StoryController:
     def process_user_input(self, user_input: str, 
                           current_character: str) -> Tuple[str, List[Dict]]:
         """處理用戶輸入並生成回應."""
+        print(f"[處理用戶輸入] 輸入: {user_input}, 角色: {current_character}")
+        
         if not self.current_story:
-            raise ValueError("沒有活躍的故事")
+            print("[錯誤] 沒有活躍的故事，嘗試載入已保存的故事")
+            self.current_story = self.load_story()
+            if not self.current_story:
+                raise ValueError("沒有活躍的故事，請先創建或選擇一個世界")
             
         # 初始化新的聊天會話
         if not self.current_session_id:
+            print("[信息] 創建新的聊天會話")
             self.current_session_id = self._create_new_chat_session(current_character)
             
         # 更新對話歷史
@@ -116,8 +122,11 @@ class StoryController:
         })
         
         # 獲取當前角色
-        character = self.current_story.characters.get(current_character)
+        print(f"[信息] 嘗試獲取角色: {current_character}")
+        print(f"[調試] 當前可用角色: {list(self.current_story.characters.keys())}")
+        character = self.current_story.characters.get(current_character.lower())
         if not character:
+            print(f"[錯誤] 找不到角色 {current_character}")
             raise ValueError(f"找不到角色: {current_character}")
             
         # 使用AI生成回應

@@ -20,8 +20,8 @@
     <!-- 全局配置 -->
     <script>
         window.SERVER_CONFIG = {
-            host: '{{ request.host.split(":")[0] }}',
-            port: {{ request.host.split(":")[1] if ":" in request.host else 5000 }},
+            host: window.location.hostname,
+            port: {{ config.get('PORT', 5000) }},
             debug: {{ config.DEBUG|tojson }},
             version: '1.0.0'
         };
