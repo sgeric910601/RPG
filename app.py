@@ -9,6 +9,7 @@ from backend.utils.prompt_enhancer import PromptEnhancer
 from typing import Dict, List
 from dotenv import load_dotenv
 from backend.utils.ai_handler import AIHandler
+from backend.utils.model_manager import ModelManager
 from backend.controllers.story_controller import StoryController
 from backend.models.character import Character
 from backend.utils.prompt_manager import PromptManager
@@ -39,6 +40,7 @@ socketio = SocketIO(
 
 # 初始化AI處理器和故事控制器
 ai_handler = AIHandler()
+model_manager = ModelManager()
 story_controller = StoryController(ai_handler)
 
 # 初始化提示詞管理相關組件
@@ -193,6 +195,20 @@ def handle_message(data):
             'status': 'error',
             'message': f"處理消息時發生錯誤: {str(e)}"
         }, room=request.sid)
+
+@app.route('/api/models', methods=['GET'])
+def get_models():
+    """獲取可用的AI模型列表."""
+    try:
+        models = model_manager.get_all_models()
+        return jsonify({
+            'status': 'success', 'models': model_manager.get_model_names()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 400
 
 @app.route('/api/set_model', methods=['POST'])
 def set_model():

@@ -13,8 +13,15 @@ class AnthropicClient:
             raise ValueError("未提供Anthropic API密鑰")
             
         try:
+            # 移除任何可能的代理設置
+            import os
+            os.environ.pop('HTTP_PROXY', None)
+            os.environ.pop('HTTPS_PROXY', None)
+            os.environ.pop('http_proxy', None)
+            os.environ.pop('https_proxy', None)
+            
             import anthropic
-            self.client = anthropic.Anthropic(api_key=self.api_key)
+            self.client = anthropic.Anthropic(api_key=self.api_key, base_url="https://api.anthropic.com")
         except ImportError:
             raise ImportError("請安裝anthropic套件: pip install anthropic")
     

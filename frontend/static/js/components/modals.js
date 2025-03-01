@@ -400,12 +400,153 @@ class ModalManager {
             case 'characterModal':
                 this.loadCharacterList();
                 break;
+            case 'settingsModal':
+                this.loadModelList();
+                break;
             case 'chatHistoryModal':
                 this.loadChatHistory();
                 break;
             case 'worldSettingModal':
                 this.loadWorldTemplates();
                 break;
+        }
+    }
+
+    /**
+     * 加載模型列表
+     */
+    async loadModelList() {
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
+            
+            if (data.status === 'success' && data.models) {
+                const modelSelect = document.querySelector('#modelSelect');
+                if (modelSelect) {
+                    // 清空現有選項
+                    modelSelect.innerHTML = '';
+                    
+                    // 添加OpenAI模型
+                    if (data.models.openai && data.models.openai.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'OpenAI 模型';
+                        data.models.openai.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 添加Claude模型
+                    if (data.models.claude && data.models.claude.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'Claude 模型';
+                        data.models.claude.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 添加OpenRouter模型
+                    if (data.models.openrouter && data.models.openrouter.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'OpenRouter 模型';
+                        data.models.openrouter.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 設置當前選中的模型
+                    const currentSettings = gameState.get('settings');
+                    if (currentSettings && currentSettings.aiModel) {
+                        modelSelect.value = currentSettings.aiModel;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('加載模型列表失敗:', error);
+            eventManager.emit('system-message', {
+                type: 'error',
+                message: '無法加載模型列表'
+            });
+        }
+    }
+
+    /**
+     * 加載模型列表
+     */
+    async loadModelList() {
+        try {
+            const response = await fetch('/api/models');
+            const data = await response.json();
+            
+            if (data.status === 'success' && data.models) {
+                const modelSelect = document.querySelector('#modelSelect');
+                if (modelSelect) {
+                    // 清空現有選項
+                    modelSelect.innerHTML = '';
+                    
+                    // 添加OpenAI模型
+                    if (data.models.openai && data.models.openai.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'OpenAI 模型';
+                        data.models.openai.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 添加Claude模型
+                    if (data.models.claude && data.models.claude.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'Claude 模型';
+                        data.models.claude.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 添加OpenRouter模型
+                    if (data.models.openrouter && data.models.openrouter.length > 0) {
+                        const optgroup = document.createElement('optgroup');
+                        optgroup.label = 'OpenRouter 模型';
+                        data.models.openrouter.forEach(model => {
+                            const option = document.createElement('option');
+                            option.value = model;
+                            option.textContent = model;
+                            optgroup.appendChild(option);
+                        });
+                        modelSelect.appendChild(optgroup);
+                    }
+                    
+                    // 設置當前選中的模型
+                    const currentSettings = gameState.get('settings');
+                    if (currentSettings && currentSettings.aiModel) {
+                        modelSelect.value = currentSettings.aiModel;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('加載模型列表失敗:', error);
+            eventManager.emit('system-message', {
+                type: 'error',
+                message: '無法加載模型列表'
+            });
         }
     }
 
@@ -444,6 +585,17 @@ class ModalManager {
         // 保存到本地存儲
         gameState.saveToLocalStorage();
         // 發送到服務器
+        
+        // 設置AI模型
+        if (settings.aiModel) {
+            fetch('/api/set_model', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ model: settings.aiModel })
+            }).catch(err => console.error('設置模型失敗:', err));
+        }
         socketManager.send('settings:save', settings);
         // 關閉模態框
         this.closeModal('settingsModal');

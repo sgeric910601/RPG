@@ -4,6 +4,8 @@ import os
 from typing import Dict, List, Optional, Any
 import openai
 from ..models.character import Character
+from ..utils.openrouter_client import OpenRouterClient
+from ..utils.model_manager import ModelManager
 from ..models.story import Story
 
 class AIHandler:
@@ -24,20 +26,25 @@ class AIHandler:
         "claude-3-haiku-20240307"
     ]
     
+    # OpenRouter 模型
+    OPENROUTER_MODELS = [
+        "deepseek/deepseek-chat:free"
+    ]
+    
     def __init__(self):
         """初始化AI處理器."""
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
         self.current_model = 'claude-3.7-sonnet'  # 更新為最新推薦默認模型
         self.temperature = 0.7
         self.max_tokens = 500
+        self.openrouter_client = OpenRouterClient()
+        self.model_manager = ModelManager()
         self.response_format = None  # 可以設置為 {"type": "json_object"} 來獲取JSON格式的回覆
     
     def get_available_models(self) -> Dict[str, List[str]]:
         """獲取所有可用的模型列表."""
-        return {
-            "openai": self.OPENAI_MODELS,
-            "claude": self.CLAUDE_MODELS
-        }
+        # 使用 ModelManager 獲取所有模型
+        return self.model_manager.get_model_names()
         
     def set_model(self, model_name: str) -> None:
         """設置當前使用的模型."""
@@ -74,6 +81,11 @@ class AIHandler:
                 response = self._call_anthropic(prompt)
                 print(f"Claude回應: {response}")
                 return response
+            elif 'deepseek' in self.current_model:
+                print(f"使用OpenRouter模型: {self.current_model}")
+                response = self._call_openrouter(prompt)
+                print(f"OpenRouter回應: {response}")
+                return response
             else:
                 raise ValueError(f"不支援的模型: {self.current_model}")
         except Exception as e:
@@ -103,6 +115,8 @@ Format:
         try:
             if 'gpt' in self.current_model:
                 choices_text = self._call_openai(prompt)
+            elif 'deepseek' in self.current_model:
+                choices_text = self._call_openrouter(prompt)
             else:
                 choices_text = self._call_anthropic(prompt)
                 
@@ -184,10 +198,35 @@ Format:
         
         return response.choices[0].message.content.strip()
     
+    def _call_openrouter(self, prompt: str) -> str:
+        """調用OpenRouter API。"""
+        openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
+        
+        if not openrouter_api_key:
+            print("[信息] 未設置OpenRouter API密鑰，使用測試模式回應")
+            return self._generate_test_response(prompt)
+            
+        try:
+            print(f"[API] 使用OpenRouter模型: {self.current_model}")
+            system_prompt = "你是一個2D遊戲中的虛擬角色。"
+            response = self.openrouter_client.generate_text(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                model=self.current_model
+            )
+            return response
+        except Exception as e:
+            raise Exception(f"OpenRouter API調用失敗: {str(e)}")
+    
     def _call_anthropic(self, prompt: str) -> str:
         """調用Anthropic API。"""
-        if os.getenv('FLASK_ENV') == 'development':
-            # 開發模式：返回測試響應
+        # 檢查環境變數
+        flask_env = os.getenv('FLASK_ENV')
+        anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+        
+        # 在開發環境或API密鑰無效時返回測試響應
+        if not anthropic_api_key:
+            print("[信息] 使用測試模式回應")
             return self._generate_test_response(prompt)
             
         anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
@@ -196,22 +235,27 @@ Format:
             
         try:
             import anthropic
-            client = anthropic.Anthropic(api_key=anthropic_api_key)
-            
+            # 使用最新的API格式
+            current_model = self.current_model if self.current_model in self.CLAUDE_MODELS else "claude-3-opus-20240229"
+
+            print(f"[API] 使用Anthropic模型: {current_model}")
             # 根據最新的Anthropic API文檔，system提示需要單獨設置
             system_prompt = "You are an AI RPG character."
             
+            client = anthropic.Anthropic(api_key=anthropic_api_key)
             response = client.messages.create(
-                model=self.current_model if self.current_model in self.CLAUDE_MODELS else "claude-3-opus-20240229",
+                model=current_model,
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                system=system_prompt,  # 使用system參數而非在messages中添加system角色
+                system=system_prompt,
                 messages=[
                     {"role": "user", "content": prompt}
                 ]
             )
             
             # 根據最新文檔，內容訪問方式為content[0].text
+            if response and response.content:
+                print(f"[API] Anthropic回應成功: {response.content[0].text[:100]}...")
             return response.content[0].text
         except ImportError:
             raise ImportError("請安裝anthropic套件: pip install anthropic")
@@ -225,9 +269,9 @@ Format:
         # 檢查是否包含用戶輸入
         if "用戶:" in prompt:
             response = {
-                "你好": "哈囉！很高興見到你。我是Yuki，雖然看起來很酷，但其實我很想和你聊天呢...",
-                "在嗎": "嗯...我一直都在這裡啊，只是...不太會主動說話而已...",
-                "名字": "我叫Yuki...雖然這個名字聽起來很冷，但我其實不是那麼難相處的...",
+                "你好": f"哈囉！你好啊～我是{prompt.split('名叫')[1].split('的')[0]}！很高興認識你！",
+                "在嗎": "嗯！我在這裡呢～有什麼想聊的嗎？",
+                "名字": f"我是{prompt.split('名叫')[1].split('的')[0]}！請多指教！",
             }
             
             for key, value in response.items():

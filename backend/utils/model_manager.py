@@ -66,25 +66,40 @@ class ModelManager:
         }
     }
     
+    # OpenRouter 模型
+    OPENROUTER_MODELS = {
+        "deepseek/deepseek-chat:free": {
+            "description": "DeepSeek Chat 模型，提供高質量的中文對話能力",
+            "tokens_limit": 32000,
+            "cost_per_1k": "免費",
+            "recommended": True,
+            "supports_vision": False
+        }
+    }
+    
     def get_all_models(self) -> Dict:
         """獲取所有模型及其詳細信息."""
         return {
             "openai": self.OPENAI_MODELS,
-            "claude": self.CLAUDE_MODELS
+            "claude": self.CLAUDE_MODELS,
+            "openrouter": self.OPENROUTER_MODELS
+            
         }
     
     def get_model_names(self) -> Dict[str, List[str]]:
         """獲取所有可用模型名稱列表."""
         return {
             "openai": list(self.OPENAI_MODELS.keys()),
-            "claude": list(self.CLAUDE_MODELS.keys())
+            "claude": list(self.CLAUDE_MODELS.keys()),
+            "openrouter": list(self.OPENROUTER_MODELS.keys())
         }
     
     def get_recommended_models(self) -> Dict[str, List[str]]:
         """獲取推薦模型列表."""
         return {
             "openai": [k for k, v in self.OPENAI_MODELS.items() if v.get("recommended", False)],
-            "claude": [k for k, v in self.CLAUDE_MODELS.items() if v.get("recommended", False)]
+            "claude": [k for k, v in self.CLAUDE_MODELS.items() if v.get("recommended", False)],
+            "openrouter": [k for k, v in self.OPENROUTER_MODELS.items() if v.get("recommended", False)]
         }
     
     def get_model_info(self, model_name: str) -> Optional[Dict]:
@@ -93,6 +108,8 @@ class ModelManager:
             return {"provider": "openai", **self.OPENAI_MODELS[model_name]}
         elif model_name in self.CLAUDE_MODELS:
             return {"provider": "claude", **self.CLAUDE_MODELS[model_name]}
+        elif model_name in self.OPENROUTER_MODELS:
+            return {"provider": "openrouter", **self.OPENROUTER_MODELS[model_name]}
         return None
     
     def suggest_model(self, task_type: str, budget_sensitive: bool = False) -> str:
@@ -105,5 +122,7 @@ class ModelManager:
             return "claude-3.7-sonnet"  # 更新為最新推薦模型
         elif task_type == "story_generation" and budget_sensitive:
             return "gpt-3.5-turbo"
+        elif task_type == "chinese_roleplay":
+            return "deepseek/deepseek-chat:free"  # 中文角色扮演推薦使用DeepSeek
         else:
             return "claude-3.7-sonnet"  # 預設推薦
