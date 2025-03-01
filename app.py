@@ -171,8 +171,8 @@ def handle_message(data):
             user_input=data['message'],
             current_character=character_name
         )
+        print(f"[WebSocket Debug] 準備發送回應: {response}")
         print(f"[WebSocket] AI回應: {response}")
-        print(f"[WebSocket] 生成選項: {choices}")
         
         # 獲取更新後的角色資料
         character = story_controller.current_story.characters.get(character_name)
@@ -181,9 +181,8 @@ def handle_message(data):
             
         socketio.emit('receive_message', {
             'status': 'success',
-            'message': response,
-            'character': character.to_dict(),
-            'choices': choices
+            'message': response.strip(),  # 確保移除任何前後空白
+            'character': character.to_dict()
         }, room=request.sid)
         print("[WebSocket] 消息發送成功")
         

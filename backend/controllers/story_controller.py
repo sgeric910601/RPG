@@ -52,54 +52,9 @@ class StoryController:
                 return json.load(f)
         except FileNotFoundError:
             raise RuntimeError("找不到故事模板文件：data/stories/story_templates.json")
-        
-    def create_story(self, world_type: str, setting: str, 
-                    background: str, adult_content: bool = False) -> Story:
-        """創建新故事."""
-        # 檢查是否為預設世界類型
-        if world_type in self.story_templates:
-            template = self.story_templates[world_type]
-            story = Story(
-                world_type=world_type,
-                setting=template['setting'] if not setting else setting,
-                background=template['background'] if not background else background,
-                characters={},
-                current_scene='introduction',
-                adult_content=adult_content,
-                themes=template.get('themes', [])
-            )
-        else:
-            # 自訂義世界
-            story = Story(
-                world_type=world_type,
-                setting=setting,
-                background=background,
-                characters={},
-                current_scene='introduction',
-                adult_content=adult_content,
-                themes=[]
-            )
-        # 添加預設角色
-        for char_name, character in self.default_characters.items():
-            story.add_character(character)
             
-        self.current_story = story
-        self._save_story()
-        self.dialogue_history = []  # 重置對話歷史
-        return story
-        
-    def add_character(self, character_data: Dict) -> Character:
-        """添加角色到當前故事."""
-        if not self.current_story:
-            raise ValueError("沒有活躍的故事")
-            
-        character = Character.from_dict(character_data)
-        self.current_story.add_character(character)
-        self._save_story()
-        return character
-        
     def process_user_input(self, user_input: str, 
-                          current_character: str) -> Tuple[str, List[Dict]]:
+                         current_character: str) -> Tuple[str, List[Dict]]:
         """處理用戶輸入並生成回應."""
         print(f"[處理用戶輸入] 輸入: {user_input}, 角色: {current_character}")
         
@@ -130,19 +85,14 @@ class StoryController:
             raise ValueError(f"找不到角色: {current_character}")
             
         # 使用AI生成回應
+        print(f"[調試] 正在生成AI回應...")
         response = self.ai_handler.generate_response(
             character=character,
             user_input=user_input,
             dialogue_history=self.dialogue_history,
             story_context=self.current_story
         )
-        
-        # 生成選項
-        choices = self.ai_handler.generate_choices(
-            character=character,
-            current_response=response,
-            story_context=self.current_story
-        )
+        print(f"[調試] AI回應: {response}")
         
         # 更新對話歷史
         self.dialogue_history.append({
@@ -154,63 +104,9 @@ class StoryController:
         # 保存聊天記錄
         self._save_chat_session()
         
-        return response, choices
+        # 返回回應和空選項列表
+        return response, []
         
-    def update_relationship(self, character1: str, 
-                          character2: str, value: int) -> None:
-        """更新角色間的關係."""
-        if not self.current_story:
-            raise ValueError("沒有活躍的故事")
-            
-        char1 = self.current_story.characters.get(character1)
-        char2 = self.current_story.characters.get(character2)
-        
-        if not char1 or not char2:
-            raise ValueError("找不到指定角色")
-            
-        char1.update_relationship(character2, value)
-        char2.update_relationship(character1, value)
-        self._save_story()
-        
-    def _save_story(self) -> None:
-        """保存當前故事到文件."""
-        if not self.current_story:
-            return
-            
-        os.makedirs('data/stories', exist_ok=True)
-        
-        # 保存故事數據
-        story_data = {
-            'story': self.current_story.to_dict(),
-            'dialogue_history': self.dialogue_history,
-            'current_session_id': self.current_session_id
-        }
-        
-        with open('data/stories/current_story.json', 'w', 
-                 encoding='utf-8') as f:
-            json.dump(story_data, f, ensure_ascii=False, indent=2)
-            
-    def load_story(self) -> Optional[Story]:
-        """從文件載入故事."""
-        try:
-            with open('data/stories/current_story.json', 'r', 
-                     encoding='utf-8') as f:
-                data = json.load(f)
-                
-                # 載入故事數據
-                story_data = data.get('story', {})
-                self.current_story = Story.from_dict(story_data)
-                
-                # 載入對話歷史
-                self.dialogue_history = data.get('dialogue_history', [])
-                
-                # 載入當前會話ID
-                self.current_session_id = data.get('current_session_id')
-                
-                return self.current_story
-        except FileNotFoundError:
-            return None
-            
     def _create_new_chat_session(self, character_name: str) -> str:
         """創建新的聊天會話."""
         import uuid
@@ -263,3 +159,35 @@ class StoryController:
         """獲取當前時間戳."""
         from datetime import datetime
         return datetime.now().isoformat()
+        
+    def _save_story(self) -> None:
+        """保存當前故事到文件."""
+        if not self.current_story:
+            return
+            
+        story_data = {
+            'story': self.current_story.to_dict(),
+            'dialogue_history': self.dialogue_history,
+            'current_session_id': self.current_session_id
+        }
+        
+        os.makedirs('data/stories', exist_ok=True)
+        with open('data/stories/current_story.json', 'w', 
+                 encoding='utf-8') as f:
+            json.dump(story_data, f, ensure_ascii=False, indent=2)
+            
+    def load_story(self) -> Optional[Story]:
+        """從文件載入故事."""
+        try:
+            with open('data/stories/current_story.json', 'r', 
+                     encoding='utf-8') as f:
+                data = json.load(f)
+                
+                story_data = data.get('story', {})
+                self.current_story = Story.from_dict(story_data)
+                self.dialogue_history = data.get('dialogue_history', [])
+                self.current_session_id = data.get('current_session_id')
+                
+                return self.current_story
+        except FileNotFoundError:
+            return None

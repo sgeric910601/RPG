@@ -3,7 +3,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 1rem;
+    min-height: 600px;
 }
 
 .dialogue-container {
@@ -13,6 +13,7 @@
     background-color: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
     margin-bottom: 1rem;
+    max-height: calc(100vh - 200px);
 }
 
 /* 消息樣式 */
@@ -24,15 +25,20 @@
 
 .message.text {
     max-width: 80%;
-    margin-left: auto;
-    margin-right: auto;
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
 }
 
-.message.player {
+.message.user {
     margin-left: auto;
 }
 
-.message.character {
+.message-content {
+    position: relative;
+    display: inline-block;
+    min-width: 50px;
+    max-width: 100%;
+    word-wrap: break-word;
     margin-right: auto;
 }
 
@@ -42,10 +48,19 @@
     padding: 1rem;
     border-radius: 15px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    white-space: pre-wrap;
 }
 
-.message.player .message-content {
+.message.user .message-content {
     background-color: #4a90e2;
+    margin-left: auto;
+}
+
+/* 輸入區域樣式 */
+.input-area {
+    padding: 1rem;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
 }
 
 .message-info {
