@@ -1,7 +1,7 @@
 """AI處理器類."""
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import openai
 from ..models.character import Character
 from ..models.story import Story
@@ -9,17 +9,47 @@ from ..models.story import Story
 class AIHandler:
     """AI處理器類，負責與不同的AI模型互動."""
     
+    # 支持的模型列表
+    OPENAI_MODELS = [
+        "gpt-4o", 
+        "gpt-4-turbo", 
+        "gpt-4", 
+        "gpt-3.5-turbo"
+    ]
+    
+    CLAUDE_MODELS = [
+        "claude-3.7-sonnet",  # 新增最新模型
+        "claude-3-opus-20240229", 
+        "claude-3-sonnet-20240229", 
+        "claude-3-haiku-20240307"
+    ]
+    
     def __init__(self):
         """初始化AI處理器."""
         self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.current_model = 'gpt-4'
+        self.current_model = 'claude-3.7-sonnet'  # 更新為最新推薦默認模型
         self.temperature = 0.7
         self.max_tokens = 500
+        self.response_format = None  # 可以設置為 {"type": "json_object"} 來獲取JSON格式的回覆
+    
+    def get_available_models(self) -> Dict[str, List[str]]:
+        """獲取所有可用的模型列表."""
+        return {
+            "openai": self.OPENAI_MODELS,
+            "claude": self.CLAUDE_MODELS
+        }
         
     def set_model(self, model_name: str) -> None:
         """設置當前使用的模型."""
         self.current_model = model_name
-        
+    
+    def set_response_format(self, format_type: Optional[str] = None) -> None:
+        """設置回應格式，可以是 'json' 或 None."""
+        if format_type == 'json':
+            self.response_format = {"type": "json_object"}
+        else:
+            self.response_format = None
+    
     def generate_response(self, character: Character, user_input: str,
                          dialogue_history: List[Dict], 
                          story_context: Story) -> str:
@@ -125,7 +155,7 @@ Format:
         return prompt
     
     def _call_openai(self, prompt: str) -> str:
-        """調用OpenAI API."""
+        """調用OpenAI API。"""
         if os.getenv('FLASK_ENV') == 'development':
             # 開發模式：返回測試響應
             return self._generate_test_response(prompt)
@@ -134,23 +164,28 @@ Format:
             raise ValueError("未設置OpenAI API密鑰")
             
         client = openai.OpenAI(api_key=self.openai_api_key)
-        response = client.chat.completions.create(
-            model=self.current_model,
-            messages=[
+        
+        # 準備API調用參數
+        params = {
+            "model": self.current_model,
+            "messages": [
                 {"role": "system", "content": "You are an AI RPG character."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=self.temperature,
-            max_tokens=self.max_tokens
-        )
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens
+        }
         
-        if hasattr(response.choices[0].message, 'content'):
-            return response.choices[0].message.content.strip()
-        else:
-            raise ValueError("無法從API響應中獲取內容")
+        # 如果需要JSON格式的回應
+        if self.response_format:
+            params["response_format"] = self.response_format
+            
+        response = client.chat.completions.create(**params)
+        
+        return response.choices[0].message.content.strip()
     
     def _call_anthropic(self, prompt: str) -> str:
-        """調用Anthropic API."""
+        """調用Anthropic API。"""
         if os.getenv('FLASK_ENV') == 'development':
             # 開發模式：返回測試響應
             return self._generate_test_response(prompt)
@@ -161,21 +196,30 @@ Format:
             
         try:
             import anthropic
-            client = anthropic.Client(api_key=anthropic_api_key)
+            client = anthropic.Anthropic(api_key=anthropic_api_key)
+            
+            # 根據最新的Anthropic API文檔，system提示需要單獨設置
+            system_prompt = "You are an AI RPG character."
+            
             response = client.messages.create(
-                model="claude-2",
+                model=self.current_model if self.current_model in self.CLAUDE_MODELS else "claude-3-opus-20240229",
                 max_tokens=self.max_tokens,
                 temperature=self.temperature,
-                messages=[{"role": "user", "content": prompt}]
+                system=system_prompt,  # 使用system參數而非在messages中添加system角色
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
             )
-            return response.content[0].text.strip()
+            
+            # 根據最新文檔，內容訪問方式為content[0].text
+            return response.content[0].text
         except ImportError:
             raise ImportError("請安裝anthropic套件: pip install anthropic")
         except Exception as e:
             raise Exception(f"Anthropic API調用失敗: {str(e)}")
-            
+    
     def _generate_test_response(self, prompt: str) -> str:
-        """生成測試響應."""
+        """生成測試響應。"""
         print(f"[測試模式] 接收到提示: {prompt}")
         
         # 檢查是否包含用戶輸入

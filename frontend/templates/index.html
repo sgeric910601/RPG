@@ -12,8 +12,10 @@
 
 {% block extra_css %}
 <link href="{{ url_for('static', filename='css/pages/game.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/components/prompt_enhancer.css') }}" rel="stylesheet">
 {% endblock %}
 
 {% block extra_js %}
 <script type="module" src="{{ url_for('static', filename='js/pages/game.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/components/prompt_enhancer.js') }}"></script>
 {% endblock %}

@@ -31,6 +31,43 @@
     </div>
 </div>
 
+<!-- 提示詞增強器模態框 -->
+<div class="modal fade" id="promptEnhancerModal" tabindex="-1" aria-labelledby="promptEnhancerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="promptEnhancerModalLabel">提示詞增強</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="prompt-container">
+                    <div class="mb-3">
+                        <label for="promptInput" class="form-label">輸入提示詞</label>
+                        <textarea class="prompt-input" id="promptInput" rows="4" 
+                                placeholder="請輸入你想要增強的提示詞..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button class="enhance-prompt-btn" id="enhanceBtn">
+                            增強提示詞
+                        </button>
+                    </div>
+
+                    <div id="enhancementResult" class="enhancement-result" style="display: none;">
+                        <!-- 增強結果將通過 JavaScript 動態插入 -->
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+                <button type="button" class="btn btn-primary" id="useEnhancedPrompt" style="display: none;">
+                    使用增強後的提示詞
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 角色管理模態框 -->
 <div class="modal fade" id="characterModal" tabindex="-1" aria-labelledby="characterModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
