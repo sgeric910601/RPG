@@ -1,10 +1,132 @@
-"""模型管理模組，提供AI模型管理功能。"""
+"""AI服務抽象基類，定義所有AI服務的通用接口。"""
 
+from abc import ABC, abstractmethod
 import json
 import os
 from typing import Dict, List, Any, Optional
 
-from ..services.ai import AIServiceFactory
+class AIService(ABC):
+    """AI服務抽象基類，定義所有AI服務的通用接口。"""
+    
+    @abstractmethod
+    def generate_text(self, prompt: str, **kwargs) -> str:
+        """生成文本響應。
+        
+        Args:
+            prompt: 提示詞
+            **kwargs: 其他參數
+            
+        Returns:
+            生成的文本
+        """
+        pass
+    
+    @abstractmethod
+    def generate_chat_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """生成聊天響應。
+        
+        Args:
+            messages: 消息列表，每個消息包含 role 和 content
+            **kwargs: 其他參數
+            
+        Returns:
+            生成的聊天響應
+        """
+        pass
+    
+    @abstractmethod
+    def enhance_prompt(self, prompt: str, **kwargs) -> Dict[str, Any]:
+        """增強提示詞。
+        
+        Args:
+            prompt: 原始提示詞
+            **kwargs: 其他參數
+            
+        Returns:
+            增強結果，包括增強後的提示詞和分析信息
+        """
+        pass
+    
+    @abstractmethod
+    def analyze_text(self, text: str, **kwargs) -> Dict[str, Any]:
+        """分析文本。
+        
+        Args:
+            text: 要分析的文本
+            **kwargs: 其他參數
+            
+        Returns:
+            分析結果
+        """
+        pass
+    
+    @abstractmethod
+    def get_model_info(self) -> Dict[str, Any]:
+        """獲取模型信息。
+        
+        Returns:
+            模型信息，包括名稱、描述、能力等
+        """
+        pass
+    
+    @abstractmethod
+    def is_available(self) -> bool:
+        """檢查服務是否可用。
+        
+        Returns:
+            服務是否可用
+        """
+        pass
+
+class AIServiceFactory:
+    """AI服務工廠類，負責創建和管理AI服務實例。"""
+    
+    _services: Dict[str, AIService] = {}
+    _default_service: Optional[str] = None
+    
+    @classmethod
+    def register_service(cls, name: str, service: AIService) -> None:
+        """註冊AI服務。
+        
+        Args:
+            name: 服務名稱
+            service: 服務實例
+        """
+        cls._services[name] = service
+        if cls._default_service is None:
+            cls._default_service = name
+    
+    @classmethod
+    def get_service(cls, name: Optional[str] = None) -> Optional[AIService]:
+        """獲取AI服務。
+        
+        Args:
+            name: 服務名稱，如果為None則返回默認服務
+            
+        Returns:
+            服務實例，如果不存在則返回None
+        """
+        if name is None and cls._default_service is not None:
+            return cls._services.get(cls._default_service)
+        return cls._services.get(name) if name else None
+    
+    @classmethod
+    def list_services(cls) -> List[str]:
+        """列出所有可用的服務。
+        
+        Returns:
+            服務名稱列表
+        """
+        return list(cls._services.keys())
+    
+    @classmethod
+    def get_available_services(cls) -> List[str]:
+        """列出所有可用的服務。
+        
+        Returns:
+            可用的服務名稱列表
+        """
+        return [name for name, service in cls._services.items() if service.is_available()]
 
 
 class ModelManager:
@@ -12,7 +134,7 @@ class ModelManager:
     
     _instance = None
     
-    def __new__(cls):
+    def __new__(cls, *args, **kwargs):
         """創建模型管理器單例。"""
         if cls._instance is None:
             cls._instance = super(ModelManager, cls).__new__(cls)
