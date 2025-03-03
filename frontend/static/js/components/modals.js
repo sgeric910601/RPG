@@ -327,7 +327,7 @@ class ModalManager {
      */
     async loadChatHistory() {
         try {
-            const response = await fetch('/api/chat_history');
+            const response = await fetch('/api/dialogues');
             const data = await response.json();
             
             if (data.status === 'success') {
@@ -369,7 +369,7 @@ class ModalManager {
      */
     async loadChatSession(sessionId) {
         try {
-            const response = await fetch(`/api/chat_history/${sessionId}`);
+            const response = await fetch(`/api/dialogues/${sessionId}`);
             const data = await response.json();
             
             if (data.status === 'success') {
@@ -639,7 +639,7 @@ class ModalManager {
      */
     async loadWorldTemplates() {
         try {
-            const response = await fetch('/api/world_templates');
+            const response = await fetch('/api/stories/templates');
             const data = await response.json();
             
             if (data.status === 'success' && data.templates) {

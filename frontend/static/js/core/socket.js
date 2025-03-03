@@ -11,13 +11,12 @@ class SocketManager {
      * 初始化 WebSocket 連接
      */
     init() {
-        const protocol = window.location.protocol;
-        const { host, port } = window.SERVER_CONFIG;
-        const url = `${protocol}//${host}:${port}`;
+        const url = `${window.location.protocol}//${window.location.host}`;
         this.socket = io(url, {
             transports: ['websocket', 'polling'],
             reconnection: true,
             reconnectionAttempts: 5,
+            path: '/socket.io',
             reconnectionDelay: 1000,
             timeout: 10000,
             autoConnect: true,

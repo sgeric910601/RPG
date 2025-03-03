@@ -60,19 +60,19 @@ class GamePage {
      */
     async loadLastGameState() {
         try {
-            const response = await fetch('/api/load_story');
+            const response = await fetch('/api/stories/load');
             const data = await response.json();
             
-            if (data.status === 'success' && data.dialogue_history) {
+            if (data.status === 'success' && data.data) {
                 // 首先設置對話歷史
-                const parsedHistory = Array.isArray(data.dialogue_history) 
-                    ? data.dialogue_history 
+                const parsedHistory = Array.isArray(data.data.dialogue_history) 
+                    ? data.data.dialogue_history 
                     : [];
                 gameState.set('dialogue.messages', parsedHistory);
 
                 // 然後設置角色信息
-                if (data.story?.current_character) {
-                    gameState.set('currentCharacter', data.story.current_character);
+                if (data.data.story?.current_character) {
+                    gameState.set('currentCharacter', data.data.story.current_character);
                 }
             }
         } catch (error) {

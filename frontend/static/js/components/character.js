@@ -161,8 +161,8 @@ class CharacterManager {
             const data = await response.json();
             
             if (data.status === 'success') {
-                gameState.set('currentCharacter', data.character);
-                eventManager.emit('character:selected', data.character);
+                gameState.set('currentCharacter', data.data.character);
+                eventManager.emit('character:selected', data.data.character);
             } else {
                 console.error('選擇角色失敗:', data.message);
             }

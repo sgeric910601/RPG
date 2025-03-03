@@ -145,8 +145,8 @@ class PromptService:
         self.ai_service = AIServiceFactory.get_service()
         
         # 提示詞數據存儲路徑
-        self.prompts_path = prompts_path or "prompts"
-        self.templates_path = templates_path or "prompt_templates"
+        self.prompts_path = prompts_path or "data/prompts"
+        self.templates_path = templates_path or "data/prompt_templates"
         
         # 確保提示詞數據目錄存在
         self.storage.ensure_directory(self.prompts_path)

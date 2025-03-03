@@ -28,7 +28,7 @@ class DialogueService:
         self.ai_service = AIServiceFactory.get_service("deepseek/deepseek-chat:free")
         
         # 對話數據存儲路徑
-        self.dialogues_path = "dialogues"
+        self.dialogues_path = "data/dialogues"
         
         # 確保對話數據目錄存在
         self.storage.ensure_directory(self.dialogues_path)

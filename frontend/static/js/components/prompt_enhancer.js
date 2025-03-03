@@ -56,7 +56,7 @@ class PromptEnhancer {
      * @returns {Promise<Object>} 增強結果
      */
     async enhancePrompt(prompt) {
-        const response = await fetch('/api/prompt/enhance', {
+        const response = await fetch('/api/prompts/enhance', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

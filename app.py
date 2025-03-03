@@ -6,12 +6,15 @@ import json
 import os
 from typing import Dict, List
 from dotenv import load_dotenv
+import eventlet
 
 from backend.api import api_bp
 from backend.core import CharacterManager, StoryManager, DialogueManager
 from backend.services.ai.base import AIServiceFactory, ModelManager
 from backend.core.prompt import PromptManager, PromptEnhancer
 from backend.utils.error import handle_error, NotFoundError
+
+eventlet.monkey_patch()
 
 load_dotenv()
 
@@ -31,11 +34,11 @@ app.register_blueprint(api_bp)
 socketio = SocketIO(
     app,
     cors_allowed_origins="*",
-    async_mode='threading',
+    async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
-    always_connect=True,
     logger=True,
+    path='socket.io',
     engineio_logger=True
 )
 

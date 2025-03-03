@@ -19,7 +19,7 @@ class CharacterService:
         self.storage = StorageServiceFactory.get_service()
         
         # 角色數據存儲路徑
-        self.characters_path = "characters"
+        self.characters_path = "data/characters"
         
         # 確保角色數據目錄存在
         self.storage.ensure_directory(self.characters_path)
