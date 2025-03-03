@@ -2,6 +2,7 @@
 
 from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO
+import logging
 import json
 import os
 from typing import Dict, List
@@ -12,7 +13,14 @@ from backend.api import api_bp
 from backend.core import CharacterManager, StoryManager, DialogueManager
 from backend.services.ai.base import AIServiceFactory, ModelManager
 from backend.core.prompt import PromptManager, PromptEnhancer
-from backend.utils.error import handle_error, NotFoundError
+from backend.utils.error import handle_error, NotFoundError, ServiceError
+
+# 設置日誌
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 輸出環境變量（不包含敏感信息）
+logger.info(f"當前工作目錄: {os.getcwd()}")
 
 eventlet.monkey_patch()
 
@@ -28,6 +36,7 @@ app.config['PORT'] = int(os.getenv('PORT', 5000))
 app.config['DEBUG'] = os.getenv('DEBUG', 'True').lower() == 'true'
 
 # 註冊API藍圖
+logger.info("正在註冊API藍圖...")
 app.register_blueprint(api_bp)
 
 # Socket.IO 配置
@@ -43,12 +52,14 @@ socketio = SocketIO(
 )
 
 # 初始化管理器
+logger.info("正在初始化管理器...")
 character_manager = CharacterManager()
 story_manager = StoryManager()
 dialogue_manager = DialogueManager()
 model_manager = ModelManager()
 
 # 初始化AI服務
+logger.info("正在初始化AI服務...")
 ai_service = AIServiceFactory.get_service()
 
 # 初始化提示詞管理相關組件
@@ -60,6 +71,7 @@ prompt_manager.set_enhancer(prompt_enhancer)
 @app.route('/')
 def index():
     """渲染主頁面."""
+    logger.info("收到首頁請求")
     server_config = {
         'host': os.getenv('HOST', '0.0.0.0'),
         'port': int(os.getenv('PORT', 5000))
@@ -71,7 +83,7 @@ def index():
 def handle_message(data):
     """處理用戶消息."""
     try:
-        print(f"[WebSocket] 接收到消息: {data}")
+        logger.info(f"[WebSocket] 接收到消息: {data}")
         
         if not data or not isinstance(data, dict):
             raise ValueError("無效的消息格式")
@@ -90,51 +102,72 @@ def handle_message(data):
         if not character_name:
             raise ValueError("無效的角色名稱")
             
-        print(f"[WebSocket] 處理角色 {character_name} 的消息...")
+        logger.info(f"[WebSocket] 處理角色 {character_name} 的消息...")
         
-        # 獲取或創建對話會話
-        try:
-            # 嘗試獲取最近的對話會話
-            sessions = dialogue_manager.get_all_dialogue_sessions()
-            if sessions:
-                session_id = sessions[0]['id']
-                session = dialogue_manager.get_dialogue_session(session_id)
-            else:
-                # 如果沒有對話會話，則創建一個新的
-                session = dialogue_manager.start_new_conversation(character_name)
-        except Exception as e:
-            print(f"[WebSocket] 獲取或創建對話會話時出錯: {str(e)}")
-            # 創建一個新的對話會話
-            session = dialogue_manager.start_new_conversation(character_name)
+        async def process_response():
+            try:
+                # 獲取或創建對話會話
+                try:
+                    # 嘗試獲取最近的對話會話
+                    sessions = dialogue_manager.get_all_dialogue_sessions()
+                    if sessions:
+                        session_id = sessions[0]['id']
+                        session = dialogue_manager.get_dialogue_session(session_id)
+                    else:
+                        # 如果沒有對話會話，則創建一個新的
+                        session = dialogue_manager.start_new_conversation(character_name)
+                except Exception as e:
+                    logger.error(f"[WebSocket] 獲取或創建對話會話時出錯: {str(e)}")
+                    # 創建一個新的對話會話
+                    session = dialogue_manager.start_new_conversation(character_name)
+                
+                # 生成AI回應
+                logger.info(f"[WebSocket] 正在處理用戶輸入: {data['message']}")
+
+                # 獲取角色資料
+                try:
+                    character = character_manager.get_character(character_name)
+                    character_data = character.to_dict()
+                except NotFoundError:
+                    # 如果找不到角色，則使用會話中的角色名稱
+                    character_data = {'name': character_name}
+                
+                # 即時發送每個生成的片段
+                full_response = []
+                async for chunk in dialogue_manager.generate_response(
+                    session.id,
+                    data['message']
+                ):
+                    full_response.append(chunk)
+                    # 發送片段給客戶端
+                    socketio.emit('receive_message', {
+                        'status': 'success',
+                        'message': chunk,
+                        'character': character_data,
+                        'is_chunk': True
+                    }, room=request.sid)
+                
+                # 發送完成信號
+                socketio.emit('receive_message', {
+                    'status': 'success',
+                    'message': ''.join(full_response),
+                    'character': character_data,
+                    'is_chunk': False
+                }, room=request.sid)
+            except Exception as e:
+                logger.error(f"[WebSocket] 生成回應時出錯: {str(e)}")
+                socketio.emit('receive_message', {
+                    'status': 'error',
+                    'message': f"生成回應時出錯: {str(e)}"
+                }, room=request.sid)
         
-        # 生成AI回應
-        print(f"[WebSocket] 正在處理用戶輸入: {data['message']}")
-        session, response = dialogue_manager.generate_response(
-            session.id,
-            data['message']
-        )
-        print(f"[WebSocket Debug] 準備發送回應: {response}")
-        print(f"[WebSocket] AI回應: {response}")
-        
-        # 獲取更新後的角色資料
-        try:
-            character = character_manager.get_character(character_name)
-            character_data = character.to_dict()
-        except NotFoundError:
-            # 如果找不到角色，則使用會話中的角色名稱
-            character_data = {'name': character_name}
-            
-        socketio.emit('receive_message', {
-            'status': 'success',
-            'message': response.strip(),  # 確保移除任何前後空白
-            'character': character_data
-        }, room=request.sid)
-        print("[WebSocket] 消息發送成功")
+        # 啟動異步處理
+        eventlet.spawn(process_response)
         
     except Exception as e:
         import traceback
-        print(f"[WebSocket] 錯誤: {str(e)}")
-        print(traceback.format_exc())
+        logger.error(f"[WebSocket] 錯誤: {str(e)}")
+        logger.error(traceback.format_exc())
         socketio.emit('receive_message', {
             'status': 'error',
             'message': f"處理消息時發生錯誤: {str(e)}"
@@ -224,4 +257,7 @@ if __name__ == '__main__':
     host = os.getenv('HOST', '0.0.0.0')  # 默認監聽所有網卡
     port = int(os.getenv('PORT', 5000))  # 默認端口 5000
     debug = os.getenv('DEBUG', 'True').lower() == 'true'  # 默認開啟調試模式
+    
+    logger.info(f"正在啟動服務器... 監聽: {host}:{port} 調試模式: {debug}")
     socketio.run(app, host=host, port=port, debug=debug)
+    logger.info("服務器啟動完成")

@@ -24,6 +24,10 @@ class DialogueManager {
             return;
         }
 
+        // 追蹤當前流式消息的元素
+        this.currentStreamElement = null;
+        this.currentStreamContent = '';
+
         this.initEventListeners();
     }
 
@@ -62,16 +66,65 @@ class DialogueManager {
             console.log('[對話系統] 收到服務器消息:', data);
             
             if (data.status === 'success' && data.message) {
-                this.displayMessage({
-                    type: 'text',
-                    speaker: data.character.name,
-                    content: data.message,
-                    speakerName: data.character.name
-                });
+                if (data.is_chunk) {
+                    // 處理流式消息片段
+                    this.handleStreamedMessage(data);
+                } else {
+                    // 處理完整消息
+                    this.completeStreamedMessage(data);
+                }
             } else {
                 console.error('[對話系統] 錯誤:', data.message || '未知錯誤');
             }
         });
+    }
+
+    /**
+     * 處理流式消息片段
+     */
+    handleStreamedMessage(data) {
+        if (!this.currentStreamElement) {
+            // 創建新的消息元素
+            const messageData = {
+                type: 'text',
+                speaker: data.character.name,
+                content: '',
+                speakerName: data.character.name
+            };
+            this.currentStreamElement = this.createMessageElement(messageData);
+            this.dialogueContainer.appendChild(this.currentStreamElement);
+            this.scrollToBottom();
+        }
+
+        // 累積內容
+        this.currentStreamContent += data.message;
+
+        // 更新顯示
+        const contentElement = this.currentStreamElement.querySelector('.message-content');
+        if (contentElement) {
+            contentElement.textContent = this.currentStreamContent;
+        }
+
+        this.scrollToBottom();
+    }
+
+    /**
+     * 完成流式消息
+     */
+    completeStreamedMessage(data) {
+        // 重置流式消息狀態
+        this.currentStreamElement = null;
+        this.currentStreamContent = '';
+
+        // 更新狀態
+        const messages = gameState.get('dialogue.messages') || [];
+        const messageData = {
+            type: 'text',
+            speaker: data.character.name,
+            content: data.message,
+            speakerName: data.character.name
+        };
+        gameState.set('dialogue.messages', [...messages, messageData]);
     }
 
     /**
@@ -96,9 +149,10 @@ class DialogueManager {
         // 滾動到底部
         this.scrollToBottom();
 
-        // 如果是文本消息且不是用戶消息，使用打字機效果
-        if (messageData.type === 'text' && messageData.speaker !== 'user') {
-            await this.typewriterEffect(messageElement, messageData.content);
+        // 如果是文本消息，立即顯示内容
+        const contentElement = messageElement.querySelector('.message-content');
+        if (contentElement) {
+            contentElement.textContent = messageData.content;
         }
     }
 
@@ -128,31 +182,6 @@ class DialogueManager {
         messageElement.appendChild(messageInfo);
         
         return messageElement;
-    }
-
-    /**
-     * 打字機效果
-     */
-    async typewriterEffect(element, text) {
-        const contentElement = element.querySelector('.message-content');
-        if (!contentElement) return Promise.resolve();
-
-        const delay = 30;
-        contentElement.textContent = '';
-        
-        return new Promise(resolve => {
-            let index = 0;
-            function type() {
-                if (index < text.length) {
-                    contentElement.textContent += text[index];
-                    index++;
-                    setTimeout(type, delay);
-                } else {
-                    resolve();
-                }
-            }
-            type();
-        });
     }
 
     /**

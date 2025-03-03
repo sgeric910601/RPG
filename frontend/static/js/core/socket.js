@@ -20,7 +20,8 @@ class SocketManager {
             reconnectionDelay: 1000,
             timeout: 10000,
             autoConnect: true,
-            withCredentials: true
+            withCredentials: true,
+            extraHeaders: {"X-Title": "RPG-Dialogue"}
         });
         this.setupEventListeners();
 

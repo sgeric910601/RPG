@@ -3,7 +3,8 @@
 import json
 import os
 import uuid
-from typing import Dict, List, Optional, Any, Tuple
+import asyncio
+from typing import Dict, List, Optional, Any, Tuple, AsyncGenerator, Union
 from datetime import datetime
 
 from ..models.conversation import Conversation, Message
@@ -42,6 +43,74 @@ class DialogueService:
         # 故事管理器
         self.story_manager = StoryManager()
     
+    async def generate_response(self, session_id: str, user_message: str) -> AsyncGenerator[str, None]:
+        """生成AI回應。
+
+        Args:
+            session_id: 對話會話ID
+            user_message: 用戶消息
+            
+        Yields:
+            AI回應的文本片段
+            
+        Raises:
+            NotFoundError: 如果找不到指定ID的對話會話
+            ServiceError: 如果生成回應時出錯
+        """
+        # 獲取對話會話
+        conversation = self.get_dialogue_session(session_id)
+        
+        # 獲取角色
+        character_name = conversation.character_name
+        try:
+            character = self.character_manager.get_character(character_name)
+        except NotFoundError:
+            raise NotFoundError(f"找不到角色: {character_name}")
+        
+        # 獲取故事
+        story_id = conversation.story_id
+        try:
+            story = self.story_manager.get_story(story_id)
+        except NotFoundError:
+            raise NotFoundError(f"找不到故事: {story_id}")
+        
+        # 添加用戶消息
+        conversation.add_user_message(user_message)
+        
+        # 構建提示詞
+        prompt = self._build_prompt(character, story, conversation.messages)
+        
+        # 生成AI回應
+        try:
+            if self.ai_service is None:
+                yield "對不起，AI服務暫時不可用。請檢查您的API密鑰設置。"
+                ai_response = "對不起，AI服務暫時不可用。請檢查您的API密鑰設置。"
+            else:
+                # 創建一個緩衝區來存儲完整的回應
+                full_response = []
+                
+                # 獲取流式回應
+                messages = [{"role": "user", "content": prompt}]
+                async for chunk in self.ai_service.generate_response(
+                    messages=messages,
+                    model=self.ai_service.default_model,
+                    stream=True
+                ):
+                    full_response.append(chunk)
+                    yield chunk
+                
+                # 將完整回應組合起來
+                ai_response = "".join(full_response)
+                
+        except Exception as e:
+            raise ServiceError("ai", f"生成回應時出錯: {str(e)}")
+        
+        # 添加AI回應到對話歷史
+        conversation.add_assistant_message(ai_response, character_name)
+        
+        # 保存對話會話
+        self._save_dialogue_session(conversation)
+
     def get_all_dialogue_sessions(self) -> List[Dict[str, Any]]:
         """獲取所有對話會話的摘要信息。
         
@@ -101,176 +170,6 @@ class DialogueService:
         except Exception as e:
             raise NotFoundError(f"找不到對話會話: {session_id}")
     
-    def create_dialogue_session(self, character_name: str, story_id: str) -> Conversation:
-        """創建新的對話會話。
-        
-        Args:
-            character_name: 角色名稱
-            story_id: 故事ID
-            
-        Returns:
-            創建的對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定名稱的角色或指定ID的故事
-        """
-        # 檢查角色是否存在
-        try:
-            character = self.character_manager.get_character(character_name)
-        except NotFoundError:
-            raise NotFoundError(f"找不到角色: {character_name}")
-        
-        # 檢查故事是否存在
-        try:
-            story = self.story_manager.get_story(story_id)
-        except NotFoundError:
-            raise NotFoundError(f"找不到故事: {story_id}")
-        
-        # 生成對話會話ID
-        session_id = str(uuid.uuid4())
-        
-        # 創建對話會話
-        conversation = Conversation(
-            id=session_id,
-            character_name=character_name,
-            story_id=story_id
-        )
-        
-        # 保存對話會話
-        self._save_dialogue_session(conversation)
-        
-        return conversation
-    
-    def add_message(self, session_id: str, message_data: Dict[str, Any]) -> Conversation:
-        """添加消息到對話會話中。
-        
-        Args:
-            session_id: 對話會話ID
-            message_data: 消息數據字典
-            
-        Returns:
-            更新後的對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-            ValidationError: 如果消息數據無效
-        """
-        # 驗證消息數據
-        self._validate_message_data(message_data)
-        
-        # 獲取對話會話
-        conversation = self.get_dialogue_session(session_id)
-        
-        # 創建消息
-        message = Message.from_dict(message_data)
-        
-        # 添加消息到對話會話中
-        conversation.add_message(message)
-        
-        # 保存對話會話
-        self._save_dialogue_session(conversation)
-        
-        return conversation
-    
-    def generate_response(self, session_id: str, user_message: str) -> Tuple[Conversation, str]:
-        """生成AI回應。
-        
-        Args:
-            session_id: 對話會話ID
-            user_message: 用戶消息
-            
-        Returns:
-            更新後的對話會話實例和AI回應
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-            ServiceError: 如果生成回應時出錯
-        """
-        # 獲取對話會話
-        conversation = self.get_dialogue_session(session_id)
-        
-        # 獲取角色
-        character_name = conversation.character_name
-        try:
-            character = self.character_manager.get_character(character_name)
-        except NotFoundError:
-            raise NotFoundError(f"找不到角色: {character_name}")
-        
-        # 獲取故事
-        story_id = conversation.story_id
-        try:
-            story = self.story_manager.get_story(story_id)
-        except NotFoundError:
-            raise NotFoundError(f"找不到故事: {story_id}")
-        
-        # 添加用戶消息
-        conversation.add_user_message(user_message)
-        
-        # 構建提示詞
-        prompt = self._build_prompt(character, story, conversation.messages)
-        
-        # 生成AI回應
-        try:
-            if self.ai_service is None:
-                ai_response = "對不起，AI服務暫時不可用。請檢查您的API密鑰設置。"
-            else:
-                ai_response = self.ai_service.generate_text(prompt)
-        except Exception as e:
-            raise ServiceError("ai", f"生成回應時出錯: {str(e)}")
-        
-        # 添加AI回應
-        conversation.add_assistant_message(ai_response, character_name)
-        
-        # 保存對話會話
-        self._save_dialogue_session(conversation)
-        
-        return conversation, ai_response
-    
-    def delete_dialogue_session(self, session_id: str) -> None:
-        """刪除對話會話。
-        
-        Args:
-            session_id: 對話會話ID
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-        """
-        # 檢查對話會話是否存在
-        self.get_dialogue_session(session_id)
-        
-        # 刪除對話會話文件
-        file_path = os.path.join(self.dialogues_path, f"{session_id}.json")
-        self.storage.delete_file(file_path)
-    
-    def _save_dialogue_session(self, conversation: Conversation) -> None:
-        """保存對話會話到文件。
-        
-        Args:
-            conversation: 對話會話實例
-        """
-        file_path = os.path.join(self.dialogues_path, f"{conversation.id}.json")
-        self.storage.write_file(file_path, json.dumps(conversation.to_dict(), ensure_ascii=False, indent=2))
-    
-    def _validate_message_data(self, data: Dict[str, Any]) -> None:
-        """驗證消息數據。
-        
-        Args:
-            data: 消息數據字典
-            
-        Raises:
-            ValidationError: 如果消息數據無效
-        """
-        # 檢查必填字段
-        required_fields = ['role', 'content']
-        for field in required_fields:
-            if field not in data or not data[field]:
-                raise ValidationError(f"缺少必填字段: {field}")
-        
-        # 驗證角色
-        valid_roles = ['user', 'assistant', 'system']
-        if data['role'] not in valid_roles:
-            raise ValidationError(f"無效的角色: {data['role']}")
-    
     def _build_prompt(self, character: Character, story: Dict[str, Any], messages: List[Message]) -> str:
         """構建AI提示詞。
         
@@ -291,7 +190,6 @@ class DialogueService:
 - 特質: {', '.join(character.traits or [])}
 - 背景: {character.background or '無特定背景'}
 """
-        
         # 構建故事背景
         story_desc = f"""故事背景：
 - 世界類型: {story.get('world_type', '現代')}
@@ -323,6 +221,15 @@ class DialogueService:
 """
         
         return prompt
+    
+    def _save_dialogue_session(self, conversation: Conversation) -> None:
+        """保存對話會話到文件。
+        
+        Args:
+            conversation: 對話會話實例
+        """
+        file_path = os.path.join(self.dialogues_path, f"{conversation.id}.json")
+        self.storage.write_file(file_path, json.dumps(conversation.to_dict(), ensure_ascii=False, indent=2))
 
 
 class DialogueManager:
@@ -347,85 +254,22 @@ class DialogueManager:
         self.story_manager = StoryManager()
         self._initialized = True
     
-    def get_all_dialogue_sessions(self) -> List[Dict[str, Any]]:
-        """獲取所有對話會話的摘要信息。
-        
-        Returns:
-            對話會話摘要列表
-        """
-        return self.dialogue_service.get_all_dialogue_sessions()
-    
-    def get_dialogue_session(self, session_id: str) -> Conversation:
-        """獲取指定ID的對話會話。
-        
-        Args:
-            session_id: 對話會話ID
-            
-        Returns:
-            對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-        """
-        return self.dialogue_service.get_dialogue_session(session_id)
-    
-    def create_dialogue_session(self, character_name: str, story_id: str) -> Conversation:
-        """創建新的對話會話。
-        
-        Args:
-            character_name: 角色名稱
-            story_id: 故事ID
-            
-        Returns:
-            創建的對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定名稱的角色或指定ID的故事
-        """
-        return self.dialogue_service.create_dialogue_session(character_name, story_id)
-    
-    def add_message(self, session_id: str, message_data: Dict[str, Any]) -> Conversation:
-        """添加消息到對話會話中。
-        
-        Args:
-            session_id: 對話會話ID
-            message_data: 消息數據字典
-            
-        Returns:
-            更新後的對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-            ValidationError: 如果消息數據無效
-        """
-        return self.dialogue_service.add_message(session_id, message_data)
-    
-    def generate_response(self, session_id: str, user_message: str) -> Tuple[Conversation, str]:
+    async def generate_response(self, session_id: str, user_message: str) -> AsyncGenerator[str, None]:
         """生成AI回應。
         
         Args:
             session_id: 對話會話ID
             user_message: 用戶消息
             
-        Returns:
-            更新後的對話會話實例和AI回應
+        Yields:
+            AI回應的文本片段
             
         Raises:
             NotFoundError: 如果找不到指定ID的對話會話
             ServiceError: 如果生成回應時出錯
         """
-        return self.dialogue_service.generate_response(session_id, user_message)
-    
-    def delete_dialogue_session(self, session_id: str) -> None:
-        """刪除對話會話。
-        
-        Args:
-            session_id: 對話會話ID
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-        """
-        self.dialogue_service.delete_dialogue_session(session_id)
+        async for chunk in self.dialogue_service.generate_response(session_id, user_message):
+            yield chunk
     
     def start_new_conversation(self, character_name: str = None, story_id: str = None) -> Conversation:
         """開始新的對話。
@@ -458,4 +302,5 @@ class DialogueManager:
                 story_id = story['id']
         
         # 創建對話會話
-        return self.create_dialogue_session(character_name, story_id)
+        conversation = self.dialogue_service.create_dialogue_session(character_name, story_id)
+        return conversation
