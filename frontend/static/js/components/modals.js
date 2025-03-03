@@ -216,14 +216,14 @@ class ModalManager {
      */
     async loadCharacterList() {
         try {
-            const response = await fetch('/api/characters');
+            const response = await fetch('/api/characters/');
             const data = await response.json();
             
-            if (data.status === 'success' && data.characters) {
+            if (data.status === 'success' && data.data && data.data.characters) {
                 const characterList = document.querySelector('.character-list');
                 if (characterList) {
-                    const charactersHtml = Object.entries(data.characters).map(([id, char]) => `
-                        <div class="character-card" data-character-id="${id}">
+                    const charactersHtml = data.data.characters.map(char => `
+                        <div class="character-card" data-character-id="${char.name.toLowerCase()}">
                             <div class="character-avatar" style="background-image: url(${char.image || ''})"></div>
                             <div class="character-info">
                                 <h5>${char.name}</h5>
@@ -232,7 +232,7 @@ class ModalManager {
                         </div>
                     `).join('');
                     
-                    characterList.innerHTML = charactersHtml;
+                    characterList.innerHTML = charactersHtml || '<div class="no-data">沒有角色數據</div>';
 
                     // 添加點擊事件
                     characterList.querySelectorAll('.character-card').forEach(card => {
@@ -241,6 +241,12 @@ class ModalManager {
                             this.selectCharacter(characterId);
                         });
                     });
+                }
+            } else {
+                console.error('角色數據格式不正確:', data);
+                const characterList = document.querySelector('.character-list');
+                if (characterList) {
+                    characterList.innerHTML = '<div class="no-data">無法加載角色數據</div>';
                 }
             }
         } catch (error) {
@@ -261,9 +267,9 @@ class ModalManager {
             const response = await fetch(`/api/characters/${characterId}`);
             const data = await response.json();
             
-            if (data.status === 'success') {
+            if (data.status === 'success' && data.data && data.data.character) {
                 // 更新遊戲狀態
-                gameState.set('currentCharacter', data.character);
+                gameState.set('currentCharacter', data.data.character);
                 
                 // 關閉模態框
                 this.closeModal('characterModal');
@@ -272,7 +278,13 @@ class ModalManager {
                 socketManager.send('character:select', { characterId });
 
                 // 發出事件通知
-                eventManager.emit('character:selected', data.character);
+                eventManager.emit('character:selected', data.data.character);
+            } else {
+                console.error('角色數據格式不正確:', data);
+                eventManager.emit('system-message', {
+                    type: 'error',
+                    message: '無法選擇角色：數據格式不正確'
+                });
             }
         } catch (error) {
             console.error('選擇角色失敗:', error);
@@ -295,7 +307,7 @@ class ModalManager {
             }
 
             // 發送創建角色請求
-            const response = await fetch('/api/characters', {
+            const response = await fetch('/api/characters/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -327,31 +339,41 @@ class ModalManager {
      */
     async loadChatHistory() {
         try {
-            const response = await fetch('/api/dialogues');
+            const response = await fetch('/api/dialogues/');
             const data = await response.json();
             
             if (data.status === 'success') {
                 const chatHistoryContainer = document.querySelector('.chat-sessions');
-                if (chatHistoryContainer && data.sessions) {
-                    const historyHtml = data.sessions.map(session => `
-                        <div class="chat-session" data-session-id="${session.id}">
-                            <div class="session-header">
-                                <h6>${session.title}</h6>
-                                <span class="date">${new Date(session.timestamp).toLocaleDateString()}</span>
+                if (chatHistoryContainer) {
+                    if (data.data && data.data.sessions && data.data.sessions.length > 0) {
+                        const historyHtml = data.data.sessions.map(session => `
+                            <div class="chat-session" data-session-id="${session.id}">
+                                <div class="session-header">
+                                    <h6>${session.title}</h6>
+                                    <span class="date">${new Date(session.timestamp).toLocaleDateString()}</span>
+                                </div>
+                                <p class="preview">${session.preview}</p>
                             </div>
-                            <p class="preview">${session.preview}</p>
-                        </div>
-                    `).join('');
-                    
-                    chatHistoryContainer.innerHTML = historyHtml;
+                        `).join('');
+                        
+                        chatHistoryContainer.innerHTML = historyHtml;
 
-                    // 添加點擊事件處理
-                    chatHistoryContainer.querySelectorAll('.chat-session').forEach(session => {
-                        session.addEventListener('click', () => {
-                            const sessionId = session.dataset.sessionId;
-                            this.loadChatSession(sessionId);
+                        // 添加點擊事件處理
+                        chatHistoryContainer.querySelectorAll('.chat-session').forEach(session => {
+                            session.addEventListener('click', () => {
+                                const sessionId = session.dataset.sessionId;
+                                this.loadChatSession(sessionId);
+                            });
                         });
-                    });
+                    } else {
+                        chatHistoryContainer.innerHTML = '<div class="no-data">沒有聊天記錄</div>';
+                    }
+                }
+            } else {
+                console.error('聊天記錄數據格式不正確:', data);
+                const chatHistoryContainer = document.querySelector('.chat-sessions');
+                if (chatHistoryContainer) {
+                    chatHistoryContainer.innerHTML = '<div class="no-data">無法加載聊天記錄</div>';
                 }
             }
         } catch (error) {
@@ -372,15 +394,21 @@ class ModalManager {
             const response = await fetch(`/api/dialogues/${sessionId}`);
             const data = await response.json();
             
-            if (data.status === 'success') {
+            if (data.status === 'success' && data.data && data.data.session) {
                 // 更新遊戲狀態
-                gameState.set('currentSession', data.session);
+                gameState.set('currentSession', data.data.session);
                 
                 // 關閉模態框
                 this.closeModal('chatHistoryModal');
                 
                 // 通知伺服器加載此會話
                 socketManager.send('chat:load', { sessionId });
+            } else {
+                console.error('聊天會話數據格式不正確:', data);
+                eventManager.emit('system-message', {
+                    type: 'error',
+                    message: '無法加載聊天會話：數據格式不正確'
+                });
             }
         } catch (error) {
             console.error('加載聊天會話失敗:', error);
@@ -420,17 +448,17 @@ class ModalManager {
             const response = await fetch('/api/models');
             const data = await response.json();
             
-            if (data.status === 'success' && data.models) {
+            if (data.status === 'success' && data.data && data.data.models) {
                 const modelSelect = document.querySelector('#modelSelect');
                 if (modelSelect) {
                     // 清空現有選項
                     modelSelect.innerHTML = '';
                     
                     // 添加OpenAI模型
-                    if (data.models.openai && data.models.openai.length > 0) {
+                    if (data.data.models.openai && data.data.models.openai.length > 0) {
                         const optgroup = document.createElement('optgroup');
                         optgroup.label = 'OpenAI 模型';
-                        data.models.openai.forEach(model => {
+                        data.data.models.openai.forEach(model => {
                             const option = document.createElement('option');
                             option.value = model;
                             option.textContent = model;
@@ -440,10 +468,10 @@ class ModalManager {
                     }
                     
                     // 添加Claude模型
-                    if (data.models.claude && data.models.claude.length > 0) {
+                    if (data.data.models.claude && data.data.models.claude.length > 0) {
                         const optgroup = document.createElement('optgroup');
                         optgroup.label = 'Claude 模型';
-                        data.models.claude.forEach(model => {
+                        data.data.models.claude.forEach(model => {
                             const option = document.createElement('option');
                             option.value = model;
                             option.textContent = model;
@@ -453,10 +481,10 @@ class ModalManager {
                     }
                     
                     // 添加OpenRouter模型
-                    if (data.models.openrouter && data.models.openrouter.length > 0) {
+                    if (data.data.models.openrouter && data.data.models.openrouter.length > 0) {
                         const optgroup = document.createElement('optgroup');
                         optgroup.label = 'OpenRouter 模型';
-                        data.models.openrouter.forEach(model => {
+                        data.data.models.openrouter.forEach(model => {
                             const option = document.createElement('option');
                             option.value = model;
                             option.textContent = model;
@@ -471,74 +499,11 @@ class ModalManager {
                         modelSelect.value = currentSettings.aiModel;
                     }
                 }
-            }
-        } catch (error) {
-            console.error('加載模型列表失敗:', error);
-            eventManager.emit('system-message', {
-                type: 'error',
-                message: '無法加載模型列表'
-            });
-        }
-    }
-
-    /**
-     * 加載模型列表
-     */
-    async loadModelList() {
-        try {
-            const response = await fetch('/api/models');
-            const data = await response.json();
-            
-            if (data.status === 'success' && data.models) {
+            } else {
+                console.error('模型數據格式不正確:', data);
                 const modelSelect = document.querySelector('#modelSelect');
                 if (modelSelect) {
-                    // 清空現有選項
-                    modelSelect.innerHTML = '';
-                    
-                    // 添加OpenAI模型
-                    if (data.models.openai && data.models.openai.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'OpenAI 模型';
-                        data.models.openai.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
-                    
-                    // 添加Claude模型
-                    if (data.models.claude && data.models.claude.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'Claude 模型';
-                        data.models.claude.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
-                    
-                    // 添加OpenRouter模型
-                    if (data.models.openrouter && data.models.openrouter.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'OpenRouter 模型';
-                        data.models.openrouter.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
-                    
-                    // 設置當前選中的模型
-                    const currentSettings = gameState.get('settings');
-                    if (currentSettings && currentSettings.aiModel) {
-                        modelSelect.value = currentSettings.aiModel;
-                    }
+                    modelSelect.innerHTML = '<option value="">無法加載模型</option>';
                 }
             }
         } catch (error) {
@@ -642,10 +607,10 @@ class ModalManager {
             const response = await fetch('/api/stories/templates');
             const data = await response.json();
             
-            if (data.status === 'success' && data.templates) {
+            if (data.status === 'success' && data.data && data.data.templates) {
                 const templateList = document.querySelector('.template-list');
                 if (templateList) {
-                    const templatesHtml = data.templates.map(template => `
+                    const templatesHtml = data.data.templates.map(template => `
                         <div class="world-template" data-template-id="${template.id}">
                             <h6>${template.name}</h6>
                             <p class="description">${template.description}</p>
@@ -655,15 +620,21 @@ class ModalManager {
                         </div>
                     `).join('');
                     
-                    templateList.innerHTML = templatesHtml;
+                    templateList.innerHTML = templatesHtml || '<div class="no-data">沒有世界模板</div>';
 
                     // 添加點擊事件
                     templateList.querySelectorAll('.world-template').forEach(template => {
                         template.addEventListener('click', () => {
                             const templateId = template.dataset.templateId;
-                            this.selectWorldTemplate(templateId, data.templates);
+                            this.selectWorldTemplate(templateId, data.data.templates);
                         });
                     });
+                }
+            } else {
+                console.error('世界模板數據格式不正確:', data);
+                const templateList = document.querySelector('.template-list');
+                if (templateList) {
+                    templateList.innerHTML = '<div class="no-data">無法加載世界模板</div>';
                 }
             }
         } catch (error) {

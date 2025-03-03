@@ -110,7 +110,7 @@ def handle_message(data):
         # 生成AI回應
         print(f"[WebSocket] 正在處理用戶輸入: {data['message']}")
         session, response = dialogue_manager.generate_response(
-            session['id'],
+            session.id,
             data['message']
         )
         print(f"[WebSocket Debug] 準備發送回應: {response}")

@@ -45,7 +45,15 @@ class CharacterService:
             file_path = os.path.join(self.characters_path, file_name)
             try:
                 data = json.loads(self.storage.read_file(file_path))
-                characters.append(Character.from_dict(data))
+                # 處理兩種可能的格式：字典格式和列表格式
+                if isinstance(data, dict) and not any(isinstance(v, (list, tuple)) for v in data.values()):
+                    # 字典格式，其中鍵是角色ID，值是角色數據
+                    for char_data in data.values():
+                        characters.append(Character.from_dict(char_data))
+                else:
+                    # 單個角色數據
+                    characters.append(Character.from_dict(data))
+                
             except Exception as e:
                 print(f"讀取角色文件 {file_path} 時出錯: {str(e)}")
         
@@ -63,13 +71,29 @@ class CharacterService:
         Raises:
             NotFoundError: 如果找不到指定名稱的角色
         """
-        file_path = os.path.join(self.characters_path, f"{name.lower()}.json")
+        # 首先嘗試從單獨的角色文件中獲取
+        single_file_path = os.path.join(self.characters_path, f"{name.lower()}.json")
+        if self.storage.file_exists(single_file_path):
+            try:
+                data = json.loads(self.storage.read_file(single_file_path))
+                return Character.from_dict(data)
+            except Exception:
+                pass
+
+        # 如果單獨文件不存在或讀取失敗，嘗試從default_characters.json中獲取
+        default_file_path = os.path.join(self.characters_path, "default_characters.json")
+        if self.storage.file_exists(default_file_path):
+            try:
+                data = json.loads(self.storage.read_file(default_file_path))
+                # 檢查是否是字典格式
+                if isinstance(data, dict):
+                    for char_id, char_data in data.items():
+                        if char_id.lower() == name.lower() or char_data.get('name', '').lower() == name.lower():
+                            return Character.from_dict(char_data)
+            except Exception:
+                pass
         
-        try:
-            data = json.loads(self.storage.read_file(file_path))
-            return Character.from_dict(data)
-        except Exception as e:
-            raise NotFoundError(f"找不到角色: {name}")
+        raise NotFoundError("character", name)
     
     def create_character(self, character_data: Dict[str, Any]) -> Character:
         """創建新角色。

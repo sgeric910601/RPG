@@ -127,6 +127,17 @@ class FileStorageService(StorageService):
         except Exception as e:
             raise DatabaseError(f"Failed to delete file: {str(e)}")
     
+    def file_exists(self, file_path: str) -> bool:
+        """檢查文件是否存在。
+        
+        Args:
+            file_path: 文件路徑
+            
+        Returns:
+            文件是否存在
+        """
+        return os.path.exists(file_path)
+    
     def save(self, collection: str, id: str, data: Dict[str, Any]) -> bool:
         """保存數據。
         

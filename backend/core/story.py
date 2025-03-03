@@ -87,7 +87,7 @@ class StoryService:
             data = json.loads(self.storage.read_file(file_path))
             return data
         except Exception as e:
-            raise NotFoundError(f"找不到故事: {story_id}")
+            raise NotFoundError("story", story_id)
     
     def create_story(self, story_data: Dict[str, Any]) -> Dict[str, Any]:
         """創建新故事。

@@ -291,10 +291,10 @@ class DialogueService:
         
         # 構建故事背景
         story_desc = f"""故事背景：
-- 世界類型: {story['world_type']}
-- 設定: {story['setting']}
-- 背景: {story['background']}
-- 當前場景: {story['current_scene']}
+- 世界類型: {story.get('world_type', '現代')}
+- 設定: {story.get('setting', '未知')}
+- 背景: {story.get('background', '未知')}
+- 當前場景: {story.get('current_scene', '未知')}
 - 主題: {', '.join(story.get('themes', []))}
 """
         

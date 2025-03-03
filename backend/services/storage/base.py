@@ -166,6 +166,18 @@ class StorageService(ABC):
             刪除是否成功
         """
         pass
+    
+    @abstractmethod
+    def file_exists(self, file_path: str) -> bool:
+        """檢查文件是否存在。
+        
+        Args:
+            file_path: 文件路徑
+            
+        Returns:
+            文件是否存在
+        """
+        pass
 
 class StorageServiceFactory:
     """存儲服務工廠類，負責創建和管理存儲服務實例。"""
