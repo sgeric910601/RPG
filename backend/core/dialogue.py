@@ -25,7 +25,7 @@ class DialogueService:
         self.storage = StorageServiceFactory.get_service()
         
         # 獲取AI服務
-        self.ai_service = AIServiceFactory.get_service("deepseek/deepseek-chat:free")
+        self.ai_service = AIServiceFactory.get_service()
         
         # 對話數據存儲路徑
         self.dialogues_path = "data/dialogues"
@@ -211,7 +211,10 @@ class DialogueService:
         
         # 生成AI回應
         try:
-            ai_response = self.ai_service.generate_text(prompt)
+            if self.ai_service is None:
+                ai_response = "對不起，AI服務暫時不可用。請檢查您的API密鑰設置。"
+            else:
+                ai_response = self.ai_service.generate_text(prompt)
         except Exception as e:
             raise ServiceError("ai", f"生成回應時出錯: {str(e)}")
         

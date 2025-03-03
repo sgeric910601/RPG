@@ -146,9 +146,29 @@ def get_models():
     """獲取可用的AI模型列表."""
     try:
         models = model_manager.get_all_models()
+        
+        # 按照提供商分組模型
+        grouped_models = {
+            'openai': [],
+            'claude': [],
+            'openrouter': []
+        }
+        
+        for model_id, model_info in models.items():
+            provider = model_info.get('api_type', 'openai')
+            
+            # 將anthropic映射到claude
+            if provider == 'anthropic':
+                provider = 'claude'
+                
+            if provider in grouped_models:  
+                grouped_models[provider].append(model_id)
+        
         return jsonify({
             'status': 'success', 
-            'models': model_manager.get_model_names()
+            'data': {
+                'models': grouped_models
+            }
         })
     except Exception as e:
         return handle_error(e, '獲取模型列表時發生錯誤')
@@ -168,12 +188,12 @@ def set_model():
         # 獲取AI服務
         ai_service = AIServiceFactory.get_service()
         
-        # 設置模型
-        ai_service.set_model(data['model'])
-        
+        # 使用ModelManager設置模型
+        model_manager.set_model(data['model'])
+
         return jsonify({'status': 'success'})
     except Exception as e:
-        return handle_error(e, '設置模型時發生錯誤')
+        return jsonify({'status': 'error', 'message': f'設置模型時發生錯誤: {str(e)}'})
 
 
 @app.route('/api/prompt/enhance', methods=['POST'])

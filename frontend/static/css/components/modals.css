@@ -180,6 +180,13 @@
     color: #fff;
 }
 
+/* 下拉選項樣式 */
+option {
+    background-color: #1a1a1a;
+    color: #fff;
+    padding: 5px;
+}
+
 /* 關閉按鈕樣式 */
 .btn-close {
     filter: invert(1) grayscale(100%) brightness(200%);
