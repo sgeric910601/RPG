@@ -3,14 +3,17 @@
 from abc import ABC, abstractmethod
 import json
 import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, AsyncGenerator, Union
+import logging
+
+logger = logging.getLogger(__name__)
 
 class AIService(ABC):
     """AI服務抽象基類，定義所有AI服務的通用接口。"""
     
     @abstractmethod
     def generate_text(self, prompt: str, **kwargs) -> str:
-        """生成文本響應。
+        """同步生成文本響應。
         
         Args:
             prompt: 提示詞
@@ -22,8 +25,8 @@ class AIService(ABC):
         pass
     
     @abstractmethod
-    def generate_chat_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """生成聊天響應。
+    async def generate_chat_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
+        """異步生成聊天響應。
         
         Args:
             messages: 消息列表，每個消息包含 role 和 content
@@ -31,6 +34,54 @@ class AIService(ABC):
             
         Returns:
             生成的聊天響應
+        """
+        pass
+    
+    @abstractmethod
+    async def generate_stream_response(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """生成流式回應。
+        
+        Args:
+            messages: 對話歷史
+            model: 要使用的模型名稱
+            temperature: 溫度參數
+            max_tokens: 最大生成的token數量
+            **kwargs: 其他參數
+            
+        Yields:
+            生成的文本片段
+        """
+        pass
+    
+    @abstractmethod
+    async def generate_response(
+        self,
+        messages: List[Dict[str, str]],
+        model: str = None,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        stream: bool = True,
+        **kwargs
+    ) -> AsyncGenerator[str, None]:
+        """生成AI回覆。
+        
+        Args:
+            messages: 對話歷史
+            model: 要使用的模型名稱
+            temperature: 溫度參數
+            max_tokens: 最大生成的token數量
+            stream: 是否使用流式輸出
+            **kwargs: 其他參數
+            
+        Yields:
+            生成的文本片段
         """
         pass
     
@@ -75,6 +126,17 @@ class AIService(ABC):
         
         Returns:
             服務是否可用
+        """
+        pass
+    
+    @abstractmethod
+    def set_model(self, model_id: str) -> bool:
+        """設置當前使用的模型。
+        
+        Args:
+            model_id: 模型ID
+        Returns:
+            設置是否成功
         """
         pass
 
@@ -128,7 +190,6 @@ class AIServiceFactory:
         """
         return [name for name, service in cls._services.items() if service.is_available()]
 
-
 class ModelManager:
     """模型管理器類，提供AI模型管理功能。"""
     
@@ -147,7 +208,33 @@ class ModelManager:
             return
         
         # 從配置文件加載模型信息
-        self.config_path = os.path.join('config', 'config.json')
+        self.config_dir = 'config'
+        if not os.path.exists(self.config_dir):
+            os.makedirs(self.config_dir)
+        
+        self.config_path = os.path.join(self.config_dir, 'models.json')
+        
+        # 預設模型配置
+        self.default_models = {
+            "openrouter/deepseek-chat": {
+                "name": "DeepSeek Chat",
+                "description": "DeepSeek的對話模型",
+                "api_type": "openrouter",
+                "max_tokens": 4096,
+                "enabled": True
+            },
+            "openrouter/claude-3-opus": {
+                "name": "Claude 3 Opus",
+                "description": "Anthropic的最強大模型",
+                "api_type": "openrouter",
+                "max_tokens": 4096,
+                "enabled": True
+            }
+        }
+        
+        logger.info("[ModelManager] 初始化，配置路徑: %s", self.config_path)
+        
+        # 加載模型配置
         self.models = self._load_models()
         self._initialized = True
     
@@ -157,12 +244,24 @@ class ModelManager:
         Returns:
             模型信息字典，鍵為模型ID，值為模型信息
         """
+        # 如果配置文件不存在，創建預設配置
+        if not os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, 'w', encoding='utf-8') as f:
+                    json.dump(self.default_models, f, ensure_ascii=False, indent=4)
+                logger.info("[ModelManager] 創建預設配置文件")
+                return self.default_models
+            except Exception as e:
+                logger.error("[ModelManager] 創建預設配置失敗: %s", str(e))
+                return self.default_models
+        
+        # 讀取現有配置
         try:
             with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                return config.get('models', {})
+                models = json.load(f)
+                return models
         except Exception as e:
-            print(f"加載模型配置時出錯: {str(e)}")
+            logger.error("[ModelManager] 讀取配置失敗: %s", str(e))
             return {}
     
     def get_all_models(self) -> Dict[str, Dict[str, Any]]:
@@ -171,6 +270,7 @@ class ModelManager:
         Returns:
             模型信息字典，鍵為模型ID，值為模型信息
         """
+        logger.info("[ModelManager] 獲取所有模型: %d 個", len(self.models))
         return {
             model_id: model_info
             for model_id, model_info in self.models.items()
@@ -224,21 +324,25 @@ class ModelManager:
         """
         # 檢查模型是否存在
         if model_id not in self.models:
+            logger.warning("[ModelManager] 模型不存在: %s", model_id)
             return False
         
         # 檢查模型是否啟用
         if not self.models[model_id].get('enabled', True):
+            logger.warning("[ModelManager] 模型未啟用: %s", model_id)
             return False
         
         # 獲取AI服務
         ai_service = AIServiceFactory.get_service()
         if not ai_service:
+            logger.error("[ModelManager] 無法獲取AI服務")
             return False
         
         # 設置模型
         try:
+            logger.info("[ModelManager] 設置當前模型: %s", model_id)
             ai_service.set_model(model_id)
             return True
         except Exception as e:
-            print(f"設置模型時出錯: {str(e)}")
+            logger.error("[ModelManager] 設置模型失敗: %s", str(e))
             return False

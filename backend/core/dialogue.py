@@ -43,6 +43,37 @@ class DialogueService:
         # 故事管理器
         self.story_manager = StoryManager()
     
+    def create_dialogue_session(self, character_name: str, story_id: str) -> Conversation:
+        """創建新的對話會話。
+        
+        Args:
+            character_name: 角色名稱
+            story_id: 故事ID
+            
+        Returns:
+            創建的對話會話實例
+            
+        Raises:
+            NotFoundError: 如果找不到指定名稱的角色或指定ID的故事
+        """
+        # 檢查角色是否存在
+        try:
+            character = self.character_manager.get_character(character_name)
+        except NotFoundError:
+            raise NotFoundError(f"找不到角色: {character_name}")
+        
+        # 檢查故事是否存在
+        try:
+            story = self.story_manager.get_story(story_id)
+        except NotFoundError:
+            raise NotFoundError(f"找不到故事: {story_id}")
+        
+        # 創建對話會話
+        session_id = str(uuid.uuid4())
+        conversation = Conversation(id=session_id, character_name=character_name, story_id=story_id)
+        self._save_dialogue_session(conversation)
+        return conversation
+
     async def generate_response(self, session_id: str, user_message: str) -> AsyncGenerator[str, None]:
         """生成AI回應。
 
@@ -65,14 +96,14 @@ class DialogueService:
         try:
             character = self.character_manager.get_character(character_name)
         except NotFoundError:
-            raise NotFoundError(f"找不到角色: {character_name}")
+            raise NotFoundError("character", character_name)
         
         # 獲取故事
         story_id = conversation.story_id
         try:
             story = self.story_manager.get_story(story_id)
         except NotFoundError:
-            raise NotFoundError(f"找不到故事: {story_id}")
+            raise NotFoundError("story", story_id)
         
         # 添加用戶消息
         conversation.add_user_message(user_message)
@@ -168,7 +199,7 @@ class DialogueService:
             data = json.loads(self.storage.read_file(file_path))
             return Conversation.from_dict(data)
         except Exception as e:
-            raise NotFoundError(f"找不到對話會話: {session_id}")
+            raise NotFoundError("dialogue_session", session_id)
     
     def _build_prompt(self, character: Character, story: Dict[str, Any], messages: List[Message]) -> str:
         """構建AI提示詞。

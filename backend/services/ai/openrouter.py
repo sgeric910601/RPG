@@ -4,10 +4,14 @@ import os
 import httpx
 import asyncio
 import json
+import logging
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 
 from ...utils.error import ServiceError
 from .base import AIService
+
+# 設置日誌
+logger = logging.getLogger(__name__)
 
 class OpenRouterService(AIService):
     """OpenRouter服務實現類，提供與OpenRouter API的交互功能。"""
@@ -42,9 +46,27 @@ class OpenRouterService(AIService):
         
         # 默認模型
         self.default_model = "deepseek/deepseek-chat:free"
+        
+        logger.info(f"[OpenRouter] 初始化完成, API Key: {self.api_key[:8]}...")
+    
+    def set_model(self, model_id: str) -> bool:
+        """設置當前使用的模型。
+        
+        Args:
+            model_id: 模型ID
+        Returns:
+            設置是否成功
+        """
+        if model_id in self.SUPPORTED_MODELS:
+            self.default_model = model_id
+            logger.info(f"[OpenRouter] 設置當前模型: {model_id}")
+            return True
+        else:
+            logger.warning(f"[OpenRouter] 不支持的模型: {model_id}")
+            return False
     
     def generate_text(self, prompt: str, **kwargs) -> str:
-        """生成文本響應。
+        """同步生成文本響應。
         
         Args:
             prompt: 提示詞
@@ -53,14 +75,13 @@ class OpenRouterService(AIService):
         Returns:
             生成的文本
         """
-        # 將提示詞轉換為消息格式
         messages = [{"role": "user", "content": prompt}]
-        
-        # 使用同步方式調用異步方法
-        return asyncio.run(self.generate_chat_response(messages, **kwargs))
+        loop = asyncio.get_event_loop()
+        response = loop.run_until_complete(self.generate_chat_response(messages, **kwargs))
+        return response
     
     async def generate_chat_response(self, messages: List[Dict[str, str]], **kwargs) -> str:
-        """生成聊天響應。
+        """異步生成聊天響應。
         
         Args:
             messages: 消息列表，每個消息包含 role 和 content
@@ -69,17 +90,14 @@ class OpenRouterService(AIService):
         Returns:
             生成的聊天響應
         """
-        # 從kwargs中提取參數，如果沒有則使用默認值
         model = kwargs.get("model", self.default_model)
         temperature = kwargs.get("temperature", 0.7)
         max_tokens = kwargs.get("max_tokens", 500)
         
-        # 檢查模型是否支持
         if model not in self.SUPPORTED_MODELS:
-            print(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
+            logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
             model = self.default_model
         
-        # 準備請求數據
         request_data = {
             "model": model,
             "messages": messages,
@@ -88,7 +106,6 @@ class OpenRouterService(AIService):
             "stream": False
         }
         
-        # 設置headers
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": self.referer,
@@ -97,7 +114,7 @@ class OpenRouterService(AIService):
         }
         
         try:
-            # 發送請求
+            logger.info(f"[OpenRouter] 發送請求: {model}, stream=False")
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
@@ -106,23 +123,23 @@ class OpenRouterService(AIService):
                     timeout=30.0
                 )
                 
-                # 檢查響應
                 if response.status_code != 200:
                     error_text = self._parse_error_response(response)
                     raise ServiceError("openrouter", f"API error: {error_text}")
-                    
-                # 解析回應
+                
                 result = response.json()
                 content = result["choices"][0]["message"]["content"]
+                logger.info(f"[OpenRouter] 收到回應: {content[:50]}...")
                 
                 return content.strip()
         except Exception as e:
+            logger.error(f"[OpenRouter] 生成回應出錯: {str(e)}")
             raise ServiceError("openrouter", f"Failed to generate chat response: {str(e)}")
     
     async def generate_stream_response(
         self, 
         messages: List[Dict[str, str]], 
-        model: str, 
+        model: str = None, 
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         **kwargs
@@ -139,11 +156,11 @@ class OpenRouterService(AIService):
         Yields:
             生成的文本片段
         """
-        # 檢查模型是否支持
+        model = model or self.default_model
         if model not in self.SUPPORTED_MODELS:
+            logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
             model = self.default_model
             
-        # 準備請求數據
         request_data = {
             "model": model,
             "messages": messages,
@@ -152,7 +169,6 @@ class OpenRouterService(AIService):
             "stream": True
         }
         
-        # 設置headers
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "HTTP-Referer": self.referer,
@@ -161,6 +177,7 @@ class OpenRouterService(AIService):
         }
         
         try:
+            logger.info(f"[OpenRouter] 發送流式請求: {model}")
             async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "POST",
@@ -169,38 +186,43 @@ class OpenRouterService(AIService):
                     json=request_data,
                     timeout=60.0
                 ) as response:
-                    # 檢查響應
                     if response.status_code != 200:
                         error_text = await response.text()
                         raise ServiceError("openrouter", f"API error: {error_text}")
                     
-                    # 處理流式響應
+                    logger.info("[OpenRouter] 開始接收流式回應...")
                     async for line in response.aiter_lines():
                         if line.startswith("data: "):
-                            line = line[6:]  # 移除 "data: " 前綴
+                            line = line[6:]
                             
-                            # 跳過空行或[DONE]
                             if not line or line == "[DONE]":
                                 continue
                                 
                             try:
                                 chunk = json.loads(line)
-                                if chunk["choices"] and chunk["choices"][0]["delta"].get("content"):
-                                    yield chunk["choices"][0]["delta"]["content"]
+                                content = chunk["choices"][0]["delta"].get("content")
+                                if content:
+                                    logger.debug(f"[OpenRouter] 收到片段: {content}")
+                                    yield content
                             except json.JSONDecodeError:
+                                logger.warning(f"[OpenRouter] JSON解析錯誤: {line}")
                                 continue
+                    
+                    logger.info("[OpenRouter] 流式回應完成")
+                    
         except Exception as e:
+            logger.error(f"[OpenRouter] 生成流式回應出錯: {str(e)}")
             raise ServiceError("openrouter", f"Failed to generate stream response: {str(e)}")
     
     async def generate_response(
         self, 
         messages: List[Dict[str, str]], 
-        model: str, 
+        model: str = None, 
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
-        stream: bool = False,
+        stream: bool = True,
         **kwargs
-    ) -> Union[str, AsyncGenerator[str, None]]:
+    ) -> AsyncGenerator[str, None]:
         """生成AI回覆。
         
         Args:
@@ -211,27 +233,61 @@ class OpenRouterService(AIService):
             stream: 是否使用流式輸出
             **kwargs: 其他參數
             
-        Returns:
-            生成的回覆或生成器
+        Yields:
+            生成的文本片段
         """
-        if stream:
-            # 使用流式響應
-            return self.generate_stream_response(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **kwargs
-            )
-        else:
-            # 使用非流式響應
-            return await self.generate_chat_response(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                **kwargs
-            )
+        logger.info(f"[OpenRouter] 開始生成回應: model={model}, stream={stream}")
+        
+        async for chunk in self.generate_stream_response(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        ):
+            yield chunk
+    
+    def enhance_prompt(self, prompt: str, **kwargs) -> Dict[str, Any]:
+        """增強提示詞。
+        
+        Args:
+            prompt: 原始提示詞
+            **kwargs: 其他參數
+            
+        Returns:
+            增強結果，包括增強後的提示詞和分析信息
+        """
+        # OpenRouter不提供提示詞增強功能，返回原始提示詞
+        return {
+            "original": prompt,
+            "enhanced": prompt,
+            "analysis": {
+                "complexity": "unknown",
+                "context": "unknown",
+                "suggestions": []
+            }
+        }
+    
+    def analyze_text(self, text: str, **kwargs) -> Dict[str, Any]:
+        """分析文本。
+        
+        Args:
+            text: 要分析的文本
+            **kwargs: 其他參數
+            
+        Returns:
+            分析結果
+        """
+        # OpenRouter不提供文本分析功能，返回基本信息
+        word_count = len(text.split())
+        char_count = len(text)
+        return {
+            "statistics": {
+                "word_count": word_count,
+                "character_count": char_count,
+                "estimated_tokens": self.count_tokens(text)
+            }
+        }
     
     def get_model_info(self) -> Dict[str, Any]:
         """獲取模型信息。
@@ -290,7 +346,6 @@ class OpenRouterService(AIService):
             token數量
         """
         # OpenRouter沒有提供token計算API，使用粗略估算
-        # 不同模型的tokenizer不同，這裡使用一個粗略的估算
         # 大約4個字符算1個token
         return len(text) // 4
     

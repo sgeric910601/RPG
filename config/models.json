@@ -1,0 +1,51 @@
+{
+    "openai/gpt-4": {
+        "name": "GPT-4",
+        "description": "OpenAI最強大的模型",
+        "api_type": "openai",
+        "max_tokens": 8192,
+        "enabled": true
+    },
+    "openai/gpt-3.5-turbo": {
+        "name": "GPT-3.5 Turbo",
+        "description": "OpenAI的高效模型",
+        "api_type": "openai",
+        "max_tokens": 4096,
+        "enabled": true
+    },
+    "claude/claude-3-opus": {
+        "name": "Claude 3 Opus",
+        "description": "Anthropic的最強大模型",
+        "api_type": "claude",
+        "max_tokens": 4096,
+        "enabled": true
+    },
+    "claude/claude-3-sonnet": {
+        "name": "Claude 3 Sonnet",
+        "description": "Anthropic的平衡模型",
+        "api_type": "claude",
+        "max_tokens": 4096,
+        "enabled": true
+    },
+    "openrouter/deepseek-chat": {
+        "name": "DeepSeek Chat",
+        "description": "DeepSeek的對話模型",
+        "api_type": "openrouter",
+        "max_tokens": 4096,
+        "enabled": true
+    },
+    "openrouter/claude-3-opus": {
+        "name": "Claude 3 Opus",
+        "description": "Anthropic的最強大模型",
+        "api_type": "openrouter",
+        "max_tokens": 4096,
+        "enabled": true
+    },
+    "openrouter/gemini-pro": {
+        "name": "Gemini Pro",
+        "description": "Google的Gemini模型",
+        "api_type": "openrouter",
+        "max_tokens": 4096,
+        "enabled": true
+    }
+}

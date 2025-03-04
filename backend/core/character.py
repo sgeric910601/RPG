@@ -4,11 +4,14 @@ import json
 import os
 from typing import Dict, List, Optional, Any
 
+import logging
 from ..models.character import Character
 from ..services.storage import StorageServiceFactory
 from ..utils.validation import Validator
 from ..utils.error import ValidationError, NotFoundError
 
+# 設置日誌
+logger = logging.getLogger(__name__)
 
 class CharacterService:
     """角色服務類，提供角色相關的業務邏輯。"""
@@ -23,6 +26,7 @@ class CharacterService:
         
         # 確保角色數據目錄存在
         self.storage.ensure_directory(self.characters_path)
+        logger.info(f"角色數據目錄: {self.characters_path}")
         
         # 角色驗證器
         self.validator = Validator()
@@ -35,6 +39,7 @@ class CharacterService:
         """
         # 獲取角色目錄中的所有文件
         files = self.storage.list_files(self.characters_path)
+        logger.info(f"找到的角色文件: {files}")
         
         # 過濾出JSON文件
         character_files = [f for f in files if f.endswith('.json')]
@@ -55,7 +60,7 @@ class CharacterService:
                     characters.append(Character.from_dict(data))
                 
             except Exception as e:
-                print(f"讀取角色文件 {file_path} 時出錯: {str(e)}")
+                logger.error(f"讀取角色文件 {file_path} 時出錯: {str(e)}")
         
         return characters
     
@@ -71,6 +76,7 @@ class CharacterService:
         Raises:
             NotFoundError: 如果找不到指定名稱的角色
         """
+        logger.info(f"嘗試獲取角色: {name}")
         # 首先嘗試從單獨的角色文件中獲取
         single_file_path = os.path.join(self.characters_path, f"{name.lower()}.json")
         if self.storage.file_exists(single_file_path):
@@ -78,6 +84,7 @@ class CharacterService:
                 data = json.loads(self.storage.read_file(single_file_path))
                 return Character.from_dict(data)
             except Exception:
+                logger.warning(f"讀取單獨角色文件失敗: {single_file_path}")
                 pass
 
         # 如果單獨文件不存在或讀取失敗，嘗試從default_characters.json中獲取
@@ -85,6 +92,7 @@ class CharacterService:
         if self.storage.file_exists(default_file_path):
             try:
                 data = json.loads(self.storage.read_file(default_file_path))
+                logger.info(f"從default_characters.json讀取: {list(data.keys()) if isinstance(data, dict) else '非字典數據'}")
                 # 檢查是否是字典格式
                 if isinstance(data, dict):
                     for char_id, char_data in data.items():
@@ -93,6 +101,9 @@ class CharacterService:
             except Exception:
                 pass
         
+        error_msg = name
+        logger.error(error_msg)
+        logger.error(f"已搜索路徑: {single_file_path}, {default_file_path}")
         raise NotFoundError("character", name)
     
     def create_character(self, character_data: Dict[str, Any]) -> Character:
@@ -295,6 +306,7 @@ class CharacterManager:
         Returns:
             預設角色列表
         """
+        logger.info("正在載入預設角色...")
         # 預設角色數據
         default_characters = [
             {
@@ -331,14 +343,17 @@ class CharacterManager:
         for data in default_characters:
             try:
                 # 檢查角色是否已存在
+                char_name = data['name']
                 try:
-                    character = self.get_character(data['name'])
+                    logger.info(f"檢查角色是否存在: {char_name}")
+                    character = self.get_character(char_name)
                     characters.append(character)
                 except NotFoundError:
                     # 如果不存在，則創建新角色
+                    logger.info(f"創建新角色: {char_name}")
                     character = self.create_character(data)
                     characters.append(character)
             except Exception as e:
-                print(f"載入預設角色 {data['name']} 時出錯: {str(e)}")
+                logger.error(f"載入預設角色 {char_name} 時出錯: {str(e)}")
         
         return characters

@@ -1,13 +1,15 @@
 """RPG遊戲主程式."""
 
 from flask import Flask, render_template, jsonify, request
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 import logging
 import json
 import os
-from typing import Dict, List
+from typing import Dict, List, Union
 from dotenv import load_dotenv
 import eventlet
+import asyncio
+import traceback
 
 from backend.api import api_bp
 from backend.core import CharacterManager, StoryManager, DialogueManager
@@ -15,15 +17,22 @@ from backend.services.ai.base import AIServiceFactory, ModelManager
 from backend.core.prompt import PromptManager, PromptEnhancer
 from backend.utils.error import handle_error, NotFoundError, ServiceError
 
+# 角色名稱映射（中文到英文）
+CHARACTER_NAME_MAPPING = {
+    "雪": "Yuki",
+    "怜": "Rei",
+    "明": "Akira",
+    "晶": "Yuki"  # 添加新的映射
+}
+
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 輸出環境變量（不包含敏感信息）
-logger.info(f"當前工作目錄: {os.getcwd()}")
-
+# 初始化eventlet
 eventlet.monkey_patch()
 
+# 載入環境變量
 load_dotenv()
 
 app = Flask(__name__, 
@@ -34,10 +43,6 @@ app = Flask(__name__,
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev_key')
 app.config['PORT'] = int(os.getenv('PORT', 5000))
 app.config['DEBUG'] = os.getenv('DEBUG', 'True').lower() == 'true'
-
-# 註冊API藍圖
-logger.info("正在註冊API藍圖...")
-app.register_blueprint(api_bp)
 
 # Socket.IO 配置
 socketio = SocketIO(
@@ -50,6 +55,68 @@ socketio = SocketIO(
     path='socket.io',
     engineio_logger=True
 )
+
+def format_error(e: Exception) -> str:
+    """格式化錯誤消息。
+    
+    Args:
+        e: 異常實例
+    Returns:
+        格式化後的錯誤消息
+    """
+    if isinstance(e, NotFoundError):
+        return f"找不到{e.details['resource_type']}: {e.details['resource_id']}"
+    elif isinstance(e, ServiceError):
+        return f"服務錯誤: {e.message}"
+    else:
+        return str(e)
+
+def emit_error(error: Union[str, Exception], sid: str = None):
+    """發送錯誤消息到客戶端。
+
+    Args:
+        error: 錯誤消息或異常實例
+        sid: 客戶端的會話ID
+    """
+    if isinstance(error, Exception):
+        error_msg = format_error(error)
+    else:
+        error_msg = str(error)
+    
+    logger.error(f"[WebSocket] 發送錯誤消息: {error_msg}")
+    socketio.emit('receive_message', {
+        'status': 'error',
+        'message': error_msg
+    }, room=sid)
+
+def emit_message(message: str, character_data: Dict, is_chunk: bool = True, sid: str = None):
+    """發送消息到客戶端。
+
+    Args:
+        message: 消息內容
+        character_data: 角色數據
+        is_chunk: 是否為流式片段
+        sid: 客戶端的會話ID
+    """
+    socketio.emit('receive_message', {
+        'status': 'success',
+        'message': message,
+        'character': character_data,
+        'is_chunk': is_chunk
+    }, room=sid)
+
+def get_character_name(name: str) -> str:
+    """獲取角色的標準名稱。
+
+    Args:
+        name: 輸入的角色名稱
+    Returns:
+        標準化的角色名稱
+    """
+    mapped_name = CHARACTER_NAME_MAPPING.get(name)
+    if mapped_name:
+        logger.info(f"映射角色名稱: {name} -> {mapped_name}")
+    return mapped_name or name
 
 # 初始化管理器
 logger.info("正在初始化管理器...")
@@ -67,112 +134,18 @@ prompt_enhancer = PromptEnhancer(ai_service)
 prompt_manager = PromptManager('data/prompts')
 prompt_manager.set_enhancer(prompt_enhancer)
 
+# 註冊API藍圖
+logger.info("正在註冊API藍圖...")
+app.register_blueprint(api_bp)
 
 @app.route('/')
 def index():
     """渲染主頁面."""
-    logger.info("收到首頁請求")
     server_config = {
         'host': os.getenv('HOST', '0.0.0.0'),
         'port': int(os.getenv('PORT', 5000))
     }
     return render_template('index.html', server_config=server_config)
-
-
-@socketio.on('send_message')
-def handle_message(data):
-    """處理用戶消息."""
-    try:
-        logger.info(f"[WebSocket] 接收到消息: {data}")
-        
-        if not data or not isinstance(data, dict):
-            raise ValueError("無效的消息格式")
-            
-        if 'message' not in data:
-            raise ValueError("消息內容不能為空")
-            
-        character_name = data.get('character')
-        if not character_name:
-            raise ValueError("未指定角色")
-            
-        # 確保character是字符串類型的名稱
-        if isinstance(character_name, dict):
-            character_name = character_name.get('name')
-            
-        if not character_name:
-            raise ValueError("無效的角色名稱")
-            
-        logger.info(f"[WebSocket] 處理角色 {character_name} 的消息...")
-        
-        async def process_response():
-            try:
-                # 獲取或創建對話會話
-                try:
-                    # 嘗試獲取最近的對話會話
-                    sessions = dialogue_manager.get_all_dialogue_sessions()
-                    if sessions:
-                        session_id = sessions[0]['id']
-                        session = dialogue_manager.get_dialogue_session(session_id)
-                    else:
-                        # 如果沒有對話會話，則創建一個新的
-                        session = dialogue_manager.start_new_conversation(character_name)
-                except Exception as e:
-                    logger.error(f"[WebSocket] 獲取或創建對話會話時出錯: {str(e)}")
-                    # 創建一個新的對話會話
-                    session = dialogue_manager.start_new_conversation(character_name)
-                
-                # 生成AI回應
-                logger.info(f"[WebSocket] 正在處理用戶輸入: {data['message']}")
-
-                # 獲取角色資料
-                try:
-                    character = character_manager.get_character(character_name)
-                    character_data = character.to_dict()
-                except NotFoundError:
-                    # 如果找不到角色，則使用會話中的角色名稱
-                    character_data = {'name': character_name}
-                
-                # 即時發送每個生成的片段
-                full_response = []
-                async for chunk in dialogue_manager.generate_response(
-                    session.id,
-                    data['message']
-                ):
-                    full_response.append(chunk)
-                    # 發送片段給客戶端
-                    socketio.emit('receive_message', {
-                        'status': 'success',
-                        'message': chunk,
-                        'character': character_data,
-                        'is_chunk': True
-                    }, room=request.sid)
-                
-                # 發送完成信號
-                socketio.emit('receive_message', {
-                    'status': 'success',
-                    'message': ''.join(full_response),
-                    'character': character_data,
-                    'is_chunk': False
-                }, room=request.sid)
-            except Exception as e:
-                logger.error(f"[WebSocket] 生成回應時出錯: {str(e)}")
-                socketio.emit('receive_message', {
-                    'status': 'error',
-                    'message': f"生成回應時出錯: {str(e)}"
-                }, room=request.sid)
-        
-        # 啟動異步處理
-        eventlet.spawn(process_response)
-        
-    except Exception as e:
-        import traceback
-        logger.error(f"[WebSocket] 錯誤: {str(e)}")
-        logger.error(traceback.format_exc())
-        socketio.emit('receive_message', {
-            'status': 'error',
-            'message': f"處理消息時發生錯誤: {str(e)}"
-        }, room=request.sid)
-
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
@@ -181,8 +154,12 @@ def get_models():
         models = model_manager.get_all_models()
         
         # 按照提供商分組模型
+        logger.info(f"找到以下模型: {list(models.keys())}")
+        
         grouped_models = {
             'openai': [],
+            'openai_vision': [],
+            'gpt4': [],
             'claude': [],
             'openrouter': []
         }
@@ -190,13 +167,22 @@ def get_models():
         for model_id, model_info in models.items():
             provider = model_info.get('api_type', 'openai')
             
-            # 將anthropic映射到claude
-            if provider == 'anthropic':
-                provider = 'claude'
-                
-            if provider in grouped_models:  
-                grouped_models[provider].append(model_id)
+            # 根據模型ID和api_type進行分組
+            if 'gpt-4' in model_id and provider == 'openai':
+                grouped_models['gpt4'].append(model_id)
+            elif 'vision' in model_id and provider == 'openai':
+                grouped_models['openai_vision'].append(model_id)
+            elif provider in grouped_models:
+                if model_id not in grouped_models[provider]:
+                    grouped_models[provider].append(model_id)
+            else:
+                logger.warning(f"未知的模型提供商: {provider}, model_id: {model_id}")
         
+        # 移除空的分組
+        grouped_models = {k: v for k, v in grouped_models.items() if v}
+        
+        # 輸出最終分組結果
+        logger.info(f"按提供商分組後的模型: {grouped_models}")
         return jsonify({
             'status': 'success', 
             'data': {
@@ -204,8 +190,8 @@ def get_models():
             }
         })
     except Exception as e:
+        logger.error(f"獲取模型列表時發生錯誤: {str(e)}")
         return handle_error(e, '獲取模型列表時發生錯誤')
-
 
 @app.route('/api/set_model', methods=['POST'])
 def set_model():
@@ -218,40 +204,127 @@ def set_model():
                 'message': '缺少模型參數'
             }), 400
             
-        # 獲取AI服務
-        ai_service = AIServiceFactory.get_service()
-        
+        model_name = data['model']
+        logger.info(f"設置模型: {model_name}")
+            
         # 使用ModelManager設置模型
-        model_manager.set_model(data['model'])
-
-        return jsonify({'status': 'success'})
-    except Exception as e:
-        return jsonify({'status': 'error', 'message': f'設置模型時發生錯誤: {str(e)}'})
-
-
-@app.route('/api/prompt/enhance', methods=['POST'])
-def enhance_prompt():
-    """提示詞增強功能."""
-    try:
-        data = request.json
-        if not data or 'prompt' not in data:
+        if model_manager.set_model(model_name):
+            return jsonify({'status': 'success'})
+        else:
             return jsonify({
                 'status': 'error',
-                'message': '缺少必要的提示詞參數'
+                'message': '設置模型失敗'
             }), 400
-
-        prompt = data['prompt']
-        options = data.get('options', {})
-        detailed = options.get('detailed_analysis', False)
-
-        result = prompt_manager.enhance_prompt(prompt)
-        if not detailed:
-            result.pop('analysis', None)
-
-        return jsonify({'status': 'success', 'data': result})
     except Exception as e:
-        return handle_error(e, '增強提示詞時發生錯誤')
+        logger.error(f"設置模型時發生錯誤: {str(e)}")
+        return jsonify({
+            'status': 'error', 
+            'message': f'設置模型時發生錯誤: {str(e)}'
+        })
 
+@socketio.on('send_message')
+def handle_message(data):
+    """處理用戶消息."""
+    try:
+        logger.info(f"[WebSocket] 接收到消息: {data}")
+        
+        # 驗證消息格式
+        if not data or not isinstance(data, dict):
+            raise ValueError("無效的消息格式")
+        if 'message' not in data:
+            raise ValueError("消息內容不能為空")
+        
+        # 獲取並驗證角色名稱
+        character_name = data.get('character')
+        if not character_name:
+            raise ValueError("未指定角色")
+        if isinstance(character_name, dict):
+            character_name = character_name.get('name')
+        if not character_name:
+            raise ValueError("無效的角色名稱")
+            
+        # 轉換角色名稱
+        original_name = character_name
+        character_name = get_character_name(character_name)
+        logger.info(f"[WebSocket] 標準化角色名稱: {character_name} (原始名稱: {original_name})")
+            
+        # 保存當前的sid
+        current_sid = request.sid
+        logger.info(f"[WebSocket] 處理角色 {character_name} 的消息，SID: {current_sid}")
+
+        async def process_response():
+            try:
+                # 獲取或創建對話會話
+                try:
+                    sessions = dialogue_manager.dialogue_service.get_all_dialogue_sessions()
+                    if sessions:
+                        session_id = sessions[0]['id']
+                        session = dialogue_manager.dialogue_service.get_dialogue_session(session_id)
+                    else:
+                        session = dialogue_manager.start_new_conversation(character_name)
+                    logger.info(f"[WebSocket] 使用會話ID: {session.id}")
+                except Exception as e:
+                    logger.error(f"[WebSocket] 獲取會話時出錯: {format_error(e)}")
+                    raise
+
+                # 獲取角色數據
+                try:
+                    character = character_manager.get_character(character_name)
+                    character_data = character.to_dict()
+                    logger.info(f"[WebSocket] 獲取到角色數據: {character_data}")
+                except Exception as e:
+                    logger.error(f"[WebSocket] 獲取角色數據時出錯: {format_error(e)}")
+                    raise
+
+                # 生成回應
+                try:
+                    full_response = []
+                    logger.info(f"[WebSocket] 開始生成回應，使用角色: {character_name}")
+                    
+                    async for chunk in dialogue_manager.dialogue_service.generate_response(
+                        session.id,
+                        data['message']
+                    ):
+                        full_response.append(chunk)
+                        emit_message(chunk, character_data, True, current_sid)
+                        eventlet.sleep(0)
+
+                    if full_response:
+                        final_response = ''.join(full_response)
+                        emit_message(final_response, character_data, False, current_sid)
+                        logger.info("[WebSocket] 回應生成完成")
+                    else:
+                        raise ValueError("未生成任何回應")
+
+                except Exception as e:
+                    logger.error(f"[WebSocket] 生成回應時出錯: {format_error(e)}")
+                    raise
+
+            except Exception as e:
+                error_msg = format_error(e)
+                logger.error(f"[WebSocket] 處理回應時出錯: {error_msg}")
+                emit_error(e, current_sid)
+
+        def run_async():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(process_response())
+            except Exception as e:
+                logger.error(f"[WebSocket] 異步執行時出錯: {format_error(e)}")
+                emit_error(e, current_sid)
+            finally:
+                loop.close()
+
+        eventlet.spawn(run_async)
+
+    except Exception as e:
+        error_msg = format_error(e)
+        logger.error(f"[WebSocket] 請求處理出錯: {error_msg}")
+        if hasattr(request, 'sid') and request.sid:
+            emit_error(e, request.sid)
+        else:
+            logger.error("[WebSocket] 無法獲取request.sid")
 
 if __name__ == '__main__':
     host = os.getenv('HOST', '0.0.0.0')  # 默認監聽所有網卡
