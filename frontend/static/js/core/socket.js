@@ -1,130 +1,84 @@
-/**
- * WebSocket 連接管理模組
- */
+import { eventManager } from './events.js';
+
 class SocketManager {
     constructor() {
         this.socket = null;
-        this.messageHandlers = new Map();
+        this.eventHandlers = {};
     }
 
     /**
-     * 初始化 WebSocket 連接
+     * 初始化Socket.IO連接
      */
     init() {
-        const url = `${window.location.protocol}//${window.location.host}`;
-        this.socket = io(url, {
-            transports: ['websocket', 'polling'],
-            reconnection: true,
-            reconnectionAttempts: 5,
-            path: '/socket.io',
-            reconnectionDelay: 1000,
-            timeout: 10000,
-            autoConnect: true,
-            withCredentials: true,
-            extraHeaders: {"X-Title": "RPG-Dialogue"}
-        });
-        this.setupEventListeners();
-
-        // 添加重連事件監聽
-        this.socket.on('connect_error', (error) => {
-            console.error('WebSocket連接錯誤:', error);
-            this.showConnectionError();
+        this.socket = io({
+            path: '/socket.io'
         });
 
-        this.socket.on('reconnect', (attemptNumber) => {
-            console.log(`WebSocket重新連接成功，嘗試次數: ${attemptNumber}`);
-            this.hideConnectionError();
-        });
-
-        this.socket.on('reconnect_failed', () => {
-            console.error('WebSocket重連失敗');
-            this.showConnectionError(true);
-        });
-    }
-
-    /**
-     * 顯示連接錯誤信息
-     * @param {boolean} permanent - 是否為永久錯誤
-     */
-    showConnectionError(permanent = false) {
-        const message = permanent 
-            ? '無法連接到伺服器，請檢查網絡連接後重新整理頁面'
-            : '正在嘗試重新連接到伺服器...';
-
-        let errorDiv = document.getElementById('connection-error');
-        if (!errorDiv) {
-            errorDiv = document.createElement('div');
-            errorDiv.id = 'connection-error';
-            errorDiv.style.cssText = `
-                position: fixed;
-                top: 20px;
-                left: 50%;
-                transform: translateX(-50%);
-                background-color: #ff4444;
-                color: white;
-                padding: 1rem 2rem;
-                border-radius: 10px;
-                z-index: 9999;
-            `;
-            document.body.appendChild(errorDiv);
-        }
-        errorDiv.textContent = message;
-    }
-
-    /**
-     * 隱藏連接錯誤信息
-     */
-    hideConnectionError() {
-        const errorDiv = document.getElementById('connection-error');
-        if (errorDiv) {
-            errorDiv.remove();
-        }
-    }
-
-    /**
-     * 設置基本事件監聽器
-     */
-    setupEventListeners() {
+        // 監聽連接事件
         this.socket.on('connect', () => {
-            console.log('Connected to server');
+            console.log('WebSocket已連接');
         });
 
+        // 監聽斷開連接事件
         this.socket.on('disconnect', () => {
-            console.log('Disconnected from server');
+            console.log('WebSocket已斷開連接');
         });
 
-        this.socket.on('message', (data) => {
-            this.handleMessage(data);
+        // 監聽錯誤事件
+        this.socket.on('error', (error) => {
+            console.error('WebSocket錯誤:', error);
         });
     }
 
     /**
      * 發送消息到服務器
-     * @param {string} type - 消息類型
+     * @param {string} event - 事件名稱
      * @param {Object} data - 消息數據
      */
-    send(type, data) {
-        this.socket.emit(type, data);
+    send(event, data) {
+        if (!this.socket) {
+            console.error('WebSocket未初始化');
+            return;
+        }
+        this.socket.emit(event, data);
     }
 
     /**
-     * 註冊消息處理器
-     * @param {string} type - 消息類型
+     * 發送消息到指定角色
+     * @param {string} message - 消息內容
+     * @param {string} characterId - 角色ID
+     */
+    sendMessage(message, characterId) {
+        this.send('send_message', {
+            message: message,
+            character: characterId  // 直接使用角色ID
+        });
+    }
+
+    /**
+     * 註冊事件監聽器
+     * @param {string} event - 事件名稱
      * @param {Function} handler - 處理函數
      */
-    on(type, handler) {
-        this.messageHandlers.set(type, handler);
+    on(event, handler) {
+        if (!this.socket) {
+            console.error('WebSocket未初始化');
+            return;
+        }
+        this.socket.on(event, handler);
+        this.eventHandlers[event] = handler;
     }
 
     /**
-     * 處理接收到的消息
-     * @param {Object} data - 消息數據
+     * 移除事件監聽器
+     * @param {string} event - 事件名稱
      */
-    handleMessage(data) {
-        const handler = this.messageHandlers.get(data.type);
-        if (handler) {
-            handler(data.payload);
+    off(event) {
+        if (!this.socket || !this.eventHandlers[event]) {
+            return;
         }
+        this.socket.off(event, this.eventHandlers[event]);
+        delete this.eventHandlers[event];
     }
 }
 

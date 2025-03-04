@@ -16,6 +16,8 @@ from ..utils.error import ValidationError, NotFoundError, ServiceError
 from .character import CharacterManager
 from .story import StoryManager
 
+import logging
+logger = logging.getLogger(__name__)
 
 class DialogueService:
     """對話服務類，提供對話相關的業務邏輯。"""
@@ -43,40 +45,47 @@ class DialogueService:
         # 故事管理器
         self.story_manager = StoryManager()
     
-    def create_dialogue_session(self, character_name: str, story_id: str) -> Conversation:
+    def create_dialogue_session(self, character_id: str, story_id: str) -> Conversation:
         """創建新的對話會話。
         
         Args:
-            character_name: 角色名稱
+            character_id: 角色ID
             story_id: 故事ID
             
         Returns:
             創建的對話會話實例
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色或指定ID的故事
+            NotFoundError: 如果找不到指定ID的角色或故事
         """
         # 檢查角色是否存在
         try:
-            character = self.character_manager.get_character(character_name)
+            character = self.character_manager.get_character(character_id)
+            logger.info(f"獲取到角色: {character.name} (ID: {character_id})")
         except NotFoundError:
-            raise NotFoundError(f"找不到角色: {character_name}")
+            raise NotFoundError("character", character_id)
         
         # 檢查故事是否存在
         try:
             story = self.story_manager.get_story(story_id)
         except NotFoundError:
-            raise NotFoundError(f"找不到故事: {story_id}")
+            raise NotFoundError("story", story_id)
         
         # 創建對話會話
         session_id = str(uuid.uuid4())
-        conversation = Conversation(id=session_id, character_name=character_name, story_id=story_id)
+        conversation = Conversation(
+            id=session_id,
+            character_id=character_id,
+            character_name=character.name,
+            story_id=story_id
+        )
         self._save_dialogue_session(conversation)
+        logger.info(f"創建對話會話: {session_id} (角色: {character.name}, ID: {character_id})")
         return conversation
 
     async def generate_response(self, session_id: str, user_message: str) -> AsyncGenerator[str, None]:
         """生成AI回應。
-
+        
         Args:
             session_id: 對話會話ID
             user_message: 用戶消息
@@ -90,20 +99,21 @@ class DialogueService:
         """
         # 獲取對話會話
         conversation = self.get_dialogue_session(session_id)
+        logger.info(f"獲取對話會話: {session_id}")
         
         # 獲取角色
-        character_name = conversation.character_name
         try:
-            character = self.character_manager.get_character(character_name)
+            character = self.character_manager.get_character(conversation.character_id)
+            logger.info(f"獲取角色數據: {character.name} (ID: {conversation.character_id})")
         except NotFoundError:
-            raise NotFoundError("character", character_name)
+            logger.error(f"找不到角色ID: {conversation.character_id}")
+            raise NotFoundError("character", conversation.character_id)
         
         # 獲取故事
-        story_id = conversation.story_id
         try:
-            story = self.story_manager.get_story(story_id)
+            story = self.story_manager.get_story(conversation.story_id)
         except NotFoundError:
-            raise NotFoundError("story", story_id)
+            raise NotFoundError("story", conversation.story_id)
         
         # 添加用戶消息
         conversation.add_user_message(user_message)
@@ -137,11 +147,36 @@ class DialogueService:
             raise ServiceError("ai", f"生成回應時出錯: {str(e)}")
         
         # 添加AI回應到對話歷史
-        conversation.add_assistant_message(ai_response, character_name)
+        conversation.add_assistant_message(
+            content=ai_response,
+            character_id=character.id,
+            character_name=character.name
+        )
         
         # 保存對話會話
         self._save_dialogue_session(conversation)
+        logger.info(f"對話會話已更新: {session_id}")
 
+    def get_dialogue_session(self, session_id: str) -> Conversation:
+        """獲取指定ID的對話會話。
+        
+        Args:
+            session_id: 對話會話ID
+            
+        Returns:
+            對話會話實例
+            
+        Raises:
+            NotFoundError: 如果找不到指定ID的對話會話
+        """
+        file_path = os.path.join(self.dialogues_path, f"{session_id}.json")
+        
+        try:
+            data = json.loads(self.storage.read_file(file_path))
+            return Conversation.from_dict(data)
+        except Exception as e:
+            raise NotFoundError("dialogue_session", session_id)
+    
     def get_all_dialogue_sessions(self) -> List[Dict[str, Any]]:
         """獲取所有對話會話的摘要信息。
         
@@ -165,6 +200,7 @@ class DialogueService:
                 # 創建對話會話摘要
                 summary = {
                     'id': conversation.id,
+                    'character_id': conversation.character_id,
                     'character_name': conversation.character_name,
                     'story_id': conversation.story_id,
                     'message_count': conversation.get_message_count(),
@@ -174,33 +210,13 @@ class DialogueService:
                 
                 sessions.append(summary)
             except Exception as e:
-                print(f"讀取對話文件 {file_path} 時出錯: {str(e)}")
+                logger.error(f"讀取對話文件 {file_path} 時出錯: {str(e)}")
         
         # 按更新時間排序
         sessions.sort(key=lambda x: x.get('updated_at', ''), reverse=True)
         
         return sessions
-    
-    def get_dialogue_session(self, session_id: str) -> Conversation:
-        """獲取指定ID的對話會話。
-        
-        Args:
-            session_id: 對話會話ID
-            
-        Returns:
-            對話會話實例
-            
-        Raises:
-            NotFoundError: 如果找不到指定ID的對話會話
-        """
-        file_path = os.path.join(self.dialogues_path, f"{session_id}.json")
-        
-        try:
-            data = json.loads(self.storage.read_file(file_path))
-            return Conversation.from_dict(data)
-        except Exception as e:
-            raise NotFoundError("dialogue_session", session_id)
-    
+
     def _build_prompt(self, character: Character, story: Dict[str, Any], messages: List[Message]) -> str:
         """構建AI提示詞。
         
@@ -237,7 +253,7 @@ class DialogueService:
             if msg.role == 'user':
                 dialogue_history += f"用戶: {msg.content}\n"
             elif msg.role == 'assistant':
-                dialogue_history += f"{character.name}: {msg.content}\n"
+                dialogue_history += f"{msg.character_name or character.name}: {msg.content}\n"
         
         # 構建最終提示詞
         prompt = f"""{character_desc}
@@ -261,7 +277,7 @@ class DialogueService:
         """
         file_path = os.path.join(self.dialogues_path, f"{conversation.id}.json")
         self.storage.write_file(file_path, json.dumps(conversation.to_dict(), ensure_ascii=False, indent=2))
-
+        logger.info(f"對話會話已保存: {conversation.id}")
 
 class DialogueManager:
     """對話管理器類，提供對話管理功能。"""
@@ -302,24 +318,20 @@ class DialogueManager:
         async for chunk in self.dialogue_service.generate_response(session_id, user_message):
             yield chunk
     
-    def start_new_conversation(self, character_name: str = None, story_id: str = None) -> Conversation:
+    def start_new_conversation(self, character_id: str, story_id: str = None) -> Conversation:
         """開始新的對話。
         
         Args:
-            character_name: 角色名稱，如果為None則使用默認角色
+            character_id: 角色ID
             story_id: 故事ID，如果為None則使用默認故事
             
         Returns:
             創建的對話會話實例
+            
+        Raises:
+            NotFoundError: 如果找不到指定ID的角色或故事
         """
-        # 如果沒有指定角色，則使用默認角色
-        if character_name is None:
-            # 載入默認角色
-            default_characters = self.character_manager.load_default_characters()
-            if default_characters:
-                character_name = default_characters[0].name
-            else:
-                raise NotFoundError("沒有可用的角色")
+        logger.info(f"開始新的對話，角色ID: {character_id}")
         
         # 如果沒有指定故事，則使用默認故事
         if story_id is None:
@@ -331,7 +343,8 @@ class DialogueManager:
                 # 創建默認故事
                 story = self.story_manager.create_default_story()
                 story_id = story['id']
+            logger.info(f"使用故事ID: {story_id}")
         
         # 創建對話會話
-        conversation = self.dialogue_service.create_dialogue_session(character_name, story_id)
+        conversation = self.dialogue_service.create_dialogue_session(character_id, story_id)
         return conversation

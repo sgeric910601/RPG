@@ -1,187 +1,120 @@
-/**
- * 對話系統組件
- */
-import { eventManager } from '../core/events.js';
-import { gameState } from '../core/state.js';
 import { socketManager } from '../core/socket.js';
+import { gameState } from '../core/state.js';
+import { eventManager } from '../core/events.js';
 
 class DialogueManager {
     constructor() {
-        console.log('[對話系統] 初始化');
         this.dialogueContainer = document.querySelector('.dialogue-container');
-        
-        if (!this.dialogueContainer) {
-            console.error('[對話系統] 錯誤: 找不到對話容器元素 .dialogue-container');
-            return;
-        }
-
-        // 初始化表單元素
+        this.choiceContainer = document.querySelector('.choice-container');
         this.messageForm = document.getElementById('message-form');
         this.messageInput = document.getElementById('message-input');
         
-        if (!this.messageForm || !this.messageInput) {
-            console.error('[對話系統] 錯誤: 找不到消息表單元素');
-            return;
-        }
-
-        // 追蹤當前流式消息的元素
-        this.currentStreamElement = null;
-        this.currentStreamContent = '';
-
         this.initEventListeners();
     }
 
     /**
-     * 初始化事件監聽器
+     * 初始化事件監聽
      */
     initEventListeners() {
-        // 處理消息發送
-        this.messageForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const message = this.messageInput.value.trim();
-            if (message) {
-                console.log('[對話系統] 發送消息:', message);
-                const currentCharacter = gameState.get('currentCharacter');
-                
-                // 立即顯示用戶消息
-                this.displayMessage({
-                    type: 'text',
-                    speaker: 'user',
-                    content: message,
-                    speakerName: '你'
-                });
+        if (this.messageForm) {
+            this.messageForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.sendMessage();
+            });
+        }
 
-                // 發送到服務器
-                socketManager.send('send_message', {
-                    message: message,
-                    character: currentCharacter?.name || currentCharacter
-                });
-                
-                this.messageInput.value = '';
-            }
-        });
-
-        // 處理來自服務器的消息
         socketManager.on('receive_message', (data) => {
-            console.log('[對話系統] 收到服務器消息:', data);
-            
-            if (data.status === 'success' && data.message) {
-                if (data.is_chunk) {
-                    // 處理流式消息片段
-                    this.handleStreamedMessage(data);
-                } else {
-                    // 處理完整消息
-                    this.completeStreamedMessage(data);
-                }
-            } else {
-                console.error('[對話系統] 錯誤:', data.message || '未知錯誤');
-            }
+            this.handleServerMessage(data);
         });
     }
 
     /**
-     * 處理流式消息片段
+     * 發送消息到服務器
      */
-    handleStreamedMessage(data) {
-        if (!this.currentStreamElement) {
-            // 創建新的消息元素
-            const messageData = {
-                type: 'text',
-                speaker: data.character.name,
-                content: '',
-                speakerName: data.character.name
-            };
-            this.currentStreamElement = this.createMessageElement(messageData);
-            this.dialogueContainer.appendChild(this.currentStreamElement);
-            this.scrollToBottom();
-        }
-
-        // 累積內容
-        this.currentStreamContent += data.message;
-
-        // 更新顯示
-        const contentElement = this.currentStreamElement.querySelector('.message-content');
-        if (contentElement) {
-            contentElement.textContent = this.currentStreamContent;
-        }
-
-        this.scrollToBottom();
-    }
-
-    /**
-     * 完成流式消息
-     */
-    completeStreamedMessage(data) {
-        // 重置流式消息狀態
-        this.currentStreamElement = null;
-        this.currentStreamContent = '';
-
-        // 更新狀態
-        const messages = gameState.get('dialogue.messages') || [];
-        const messageData = {
-            type: 'text',
-            speaker: data.character.name,
-            content: data.message,
-            speakerName: data.character.name
-        };
-        gameState.set('dialogue.messages', [...messages, messageData]);
-    }
-
-    /**
-     * 顯示消息
-     * @param {Object} messageData - 消息數據
-     */
-    async displayMessage(messageData) {
-        console.log('[對話系統] 顯示消息:', messageData);
+    sendMessage() {
+        const message = this.messageInput.value.trim();
         
-        if (!this.dialogueContainer) {
-            console.error('[對話系統] 錯誤: 對話容器不存在');
+        if (!message) {
             return;
         }
 
-        const messageElement = this.createMessageElement(messageData);
-        this.dialogueContainer.appendChild(messageElement);
+        const character = gameState.get('currentCharacter');
+        if (!character || !character.id) {
+            this.showError('請先選擇一個角色');
+            return;
+        }
+        
+        // 發送消息到服務器
+        socketManager.send('send_message', {
+            message: message,
+            character: character.id  // 使用角色ID
+        });
 
-        // 更新狀態
-        const messages = gameState.get('dialogue.messages') || [];
-        gameState.set('dialogue.messages', [...messages, messageData]);
+        // 添加用戶消息到界面
+        this.addMessage({
+            content: message,
+            sender: 'user'
+        });
 
-        // 滾動到底部
-        this.scrollToBottom();
+        // 清空輸入框
+        this.messageInput.value = '';
+    }
 
-        // 如果是文本消息，立即顯示内容
-        const contentElement = messageElement.querySelector('.message-content');
-        if (contentElement) {
-            contentElement.textContent = messageData.content;
+    /**
+     * 處理服務器返回的消息
+     * @param {Object} data - 消息數據
+     */
+    handleServerMessage(data) {
+        if (data.status === 'error') {
+            this.showError(data.message);
+            return;
+        }
+
+        if (data.message) {
+            this.addMessage({
+                content: data.message,
+                sender: 'assistant',
+                character: data.character,
+                is_chunk: data.is_chunk
+            });
         }
     }
 
     /**
-     * 創建消息元素
+     * 添加消息到對話界面
+     * @param {Object} messageData - 消息數據
      */
-    createMessageElement(messageData) {
+    addMessage(messageData) {
+        const { content, sender, character, is_chunk } = messageData;
+        
+        // 如果是流式回應的第一個片段，創建新的消息容器
+        if (sender === 'assistant' && !is_chunk) {
+            const lastMessage = this.dialogueContainer.lastElementChild;
+            if (lastMessage && lastMessage.classList.contains('assistant-message')) {
+                lastMessage.querySelector('.message-content').textContent = content;
+                return;
+            }
+        }
+
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${messageData.type} ${messageData.speaker}`;
+        messageElement.className = `message ${sender}-message`;
         
-        const messageContent = document.createElement('div');
-        messageContent.className = 'message-content';
+        const contentElement = document.createElement('div');
+        contentElement.className = 'message-content';
+        contentElement.textContent = content;
         
-        // 如果是用戶消息，直接顯示內容
-        if (messageData.speaker === 'user') {
-            messageContent.textContent = messageData.content;
+        messageElement.appendChild(contentElement);
+        
+        // 如果是角色消息，添加角色信息
+        if (sender === 'assistant' && character) {
+            const nameElement = document.createElement('div');
+            nameElement.className = 'message-sender';
+            nameElement.textContent = character.name;
+            messageElement.insertBefore(nameElement, contentElement);
         }
         
-        const messageInfo = document.createElement('div');
-        messageInfo.className = 'message-info';
-        messageInfo.innerHTML = `
-            <span class="speaker">${messageData.speakerName || ''}</span>
-            <span class="timestamp">${new Date().toLocaleTimeString()}</span>
-        `;
-        
-        messageElement.appendChild(messageContent);
-        messageElement.appendChild(messageInfo);
-        
-        return messageElement;
+        this.dialogueContainer.appendChild(messageElement);
+        this.scrollToBottom();
     }
 
     /**
@@ -192,8 +125,22 @@ class DialogueManager {
             this.dialogueContainer.scrollTop = this.dialogueContainer.scrollHeight;
         }
     }
+
+    /**
+     * 顯示錯誤消息
+     * @param {string} message - 錯誤信息
+     */
+    showError(message) {
+        const event = new CustomEvent('system-message', {
+            detail: {
+                message,
+                type: 'error',
+                duration: 5000
+            }
+        });
+        document.dispatchEvent(event);
+    }
 }
 
 // 導出單例
 export const dialogueManager = new DialogueManager();
-console.log('[對話系統] 初始化完成');

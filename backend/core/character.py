@@ -52,19 +52,11 @@ class CharacterService:
                 data = json.loads(self.storage.read_file(file_path))
                 logger.info(f"讀取角色文件: {file_name}")
                 
-                # 處理default_characters.json特殊情況
-                if file_name == 'default_characters.json':
-                    if isinstance(data, dict):
-                        for char_id, char_data in data.items():
-                            if not 'id' in char_data:
-                                char_data['id'] = char_id
-                            characters.append(Character.from_dict(char_data))
-                else:
-                    # 處理單個角色文件
-                    if not 'id' in data:
-                        data['id'] = os.path.splitext(file_name)[0]
-                    characters.append(Character.from_dict(data))
-                
+                # 處理角色文件
+                if not 'id' in data:
+                    data['id'] = os.path.splitext(file_name)[0]
+                characters.append(Character.from_dict(data))
+
             except Exception as e:
                 logger.error(f"讀取角色文件 {file_path} 時出錯: {str(e)}")
         
@@ -84,7 +76,7 @@ class CharacterService:
         """
         logger.info(f"嘗試獲取角色: {char_id}")
         
-        # 首先嘗試從單獨的角色文件中獲取
+        # 從角色文件中獲取
         single_file_path = os.path.join(self.characters_path, f"{char_id}.json")
         if self.storage.file_exists(single_file_path):
             try:
@@ -94,41 +86,9 @@ class CharacterService:
                 return Character.from_dict(data)
             except Exception as e:
                 logger.warning(f"讀取角色文件失敗: {single_file_path} - {str(e)}")
-        
-        # 如果單獨文件不存在或讀取失敗，嘗試從default_characters.json中獲取
-        default_file_path = os.path.join(self.characters_path, "default_characters.json")
-        if self.storage.file_exists(default_file_path):
-            try:
-                data = json.loads(self.storage.read_file(default_file_path))
-                logger.info(f"從default_characters.json讀取的數據類型: {type(data)}")
-                logger.info(f"尋找的角色ID: {char_id}")
-                
-                # 檢查是否是字典格式
-                if isinstance(data, dict):
-                    # 首先嘗試直接匹配ID
-                    if char_id in data:
-                        char_data = data[char_id]
-                        if not 'id' in char_data:
-                            char_data['id'] = char_id
-                        logger.info(f"找到角色: {char_data.get('name', 'unknown')}")
-                        return Character.from_dict(char_data)
-                    
-                    # 如果找不到，嘗試用小寫名稱匹配ID
-                    for existing_id, char_data in data.items():
-                        if char_data.get('name', '').lower() == char_id.lower():
-                            if not 'id' in char_data:
-                                char_data['id'] = existing_id
-                            logger.info(f"通過名稱找到角色: {char_data.get('name', 'unknown')}")
-                            return Character.from_dict(char_data)
-                    
-                    logger.warning(f"在default_characters.json中找不到角色ID或名稱: {char_id}")
-                else:
-                    logger.error("default_characters.json的數據格式不正確")
-            except Exception as e:
-                logger.error(f"讀取default_characters.json失敗: {str(e)}")
-        
+
         logger.error(f"找不到角色 {char_id}")
-        logger.error(f"已搜索路徑: {single_file_path}, {default_file_path}")
+        logger.error(f"已搜索路徑: {single_file_path}")
         raise NotFoundError("character", char_id)
     
     def create_character(self, character_data: Dict[str, Any]) -> Character:

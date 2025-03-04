@@ -233,35 +233,42 @@ def handle_message(data):
             raise ValueError("無效的消息格式")
         if 'message' not in data:
             raise ValueError("消息內容不能為空")
-        
-        # 獲取並驗證角色名稱
+
+        # 獲取角色標識符
         character_name = data.get('character')
         if not character_name:
             raise ValueError("未指定角色")
-        if isinstance(character_name, dict):
-            character_name = character_name.get('name')
-        if not character_name:
-            raise ValueError("無效的角色名稱")
+        logger.info(f"[WebSocket] 收到的原始數據: {data}")
             
-        # 轉換角色ID
-        original_name = character_name
-        character_name = get_character_id(character_name)
-        logger.info(f"[WebSocket] 標準化角色名稱: {character_name} (原始名稱: {original_name})")
+        # 檢查是否已經是ID
+        if character_name in ['1', '2', '3']:
+            logger.info(f"[WebSocket] 直接使用角色ID: {character_name}")
+            character_id = character_name
+            original_name = f"角色{character_id}"
+        else:
+            # 如果不是ID，則進行轉換
+            original_name = character_name
+            character_id = get_character_id(character_name)
+            if not character_id:
+                raise ValueError(f"無法將角色名稱 '{character_name}' 轉換為有效的ID")
+
+        logger.info(f"[WebSocket] 角色名稱轉換: {original_name} -> ID: {character_id}")
             
         # 保存當前的sid
         current_sid = request.sid
-        logger.info(f"[WebSocket] 處理角色 {character_name} 的消息，SID: {current_sid}")
+        logger.info(f"[WebSocket] 處理角色 {character_id} 的消息，SID: {current_sid}")
 
         async def process_response():
             try:
-                # 獲取或創建對話會話
+                # 使用角色ID獲取或創建對話會話
                 try:
                     sessions = dialogue_manager.dialogue_service.get_all_dialogue_sessions()
                     if sessions:
                         session_id = sessions[0]['id']
                         session = dialogue_manager.dialogue_service.get_dialogue_session(session_id)
                     else:
-                        session = dialogue_manager.start_new_conversation(character_name)
+                        logger.info(f"[WebSocket] 創建新的對話會話，使用角色ID: {character_id}")
+                        session = dialogue_manager.start_new_conversation(character_id)
                     logger.info(f"[WebSocket] 使用會話ID: {session.id}")
                 except Exception as e:
                     logger.error(f"[WebSocket] 獲取會話時出錯: {format_error(e)}")
@@ -269,9 +276,12 @@ def handle_message(data):
 
                 # 獲取角色數據
                 try:
-                    character = character_manager.get_character(character_name)
+                    character = character_manager.get_character(character_id)
                     character_data = character.to_dict()
-                    logger.info(f"[WebSocket] 獲取到角色數據: {character_data}")
+                    logger.info(f"[WebSocket] 獲取到角色數據:")
+                    logger.info(f"  - ID: {character_data.get('id')}")
+                    logger.info(f"  - 名稱: {character_data.get('name')}")
+                    logger.info(f"  - 對話風格: {character_data.get('dialogue_style')}")
                 except Exception as e:
                     logger.error(f"[WebSocket] 獲取角色數據時出錯: {format_error(e)}")
                     raise
@@ -279,7 +289,7 @@ def handle_message(data):
                 # 生成回應
                 try:
                     full_response = []
-                    logger.info(f"[WebSocket] 開始生成回應，使用角色: {character_name}")
+                    logger.info(f"[WebSocket] 開始生成回應，使用角色ID: {character_id}")
                     
                     async for chunk in dialogue_manager.dialogue_service.generate_response(
                         session.id,

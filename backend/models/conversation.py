@@ -12,7 +12,8 @@ class Message:
     role: str  # user, assistant, system
     content: str
     timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
-    character: Optional[str] = None  # 角色名稱，僅當role為assistant時有效
+    character_id: Optional[str] = None  # 角色ID，僅當role為assistant時有效
+    character_name: Optional[str] = None  # 角色名稱，用於顯示
     
     def to_dict(self) -> Dict[str, Any]:
         """將消息轉換為字典格式。
@@ -20,7 +21,13 @@ class Message:
         Returns:
             消息的字典表示
         """
-        return asdict(self)
+        return {
+            'role': self.role,
+            'content': self.content,
+            'timestamp': self.timestamp,
+            'character_id': self.character_id,
+            'character_name': self.character_name
+        }
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Message':
@@ -36,7 +43,8 @@ class Message:
             role=data['role'],
             content=data['content'],
             timestamp=data.get('timestamp', datetime.now().isoformat()),
-            character=data.get('character')
+            character_id=data.get('character_id'),
+            character_name=data.get('character_name')
         )
 
 
@@ -45,7 +53,8 @@ class Conversation:
     """對話數據類，表示一個對話會話。"""
     
     id: str
-    character_name: str
+    character_id: str  # 角色ID
+    character_name: str  # 角色名稱，用於顯示
     story_id: str
     messages: List[Message] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
@@ -59,6 +68,7 @@ class Conversation:
         """
         return {
             'id': self.id,
+            'character_id': self.character_id,
             'character_name': self.character_name,
             'story_id': self.story_id,
             'messages': [message.to_dict() for message in self.messages],
@@ -83,6 +93,7 @@ class Conversation:
         
         return cls(
             id=data['id'],
+            character_id=data['character_id'],  # 必須提供有效的角色ID
             character_name=data['character_name'],
             story_id=data['story_id'],
             messages=messages,
@@ -111,17 +122,25 @@ class Conversation:
         )
         self.add_message(message)
     
-    def add_assistant_message(self, content: str, character: str) -> None:
+    def add_assistant_message(self, content: str, character_id: str = None, character_name: str = None) -> None:
         """添加助手消息到對話會話中。
         
         Args:
             content: 消息內容
-            character: 角色名稱
+            character_id: 角色ID
+            character_name: 角色名稱
         """
+        # 如果未提供參數，使用會話中的角色信息
+        if character_id is None:
+            character_id = self.character_id
+        if character_name is None:
+            character_name = self.character_name
+
         message = Message(
             role='assistant',
             content=content,
-            character=character
+            character_id=character_id,
+            character_name=character_name
         )
         self.add_message(message)
     
