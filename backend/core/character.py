@@ -50,13 +50,19 @@ class CharacterService:
             file_path = os.path.join(self.characters_path, file_name)
             try:
                 data = json.loads(self.storage.read_file(file_path))
-                # 處理兩種可能的格式：字典格式和列表格式
-                if isinstance(data, dict) and not any(isinstance(v, (list, tuple)) for v in data.values()):
-                    # 字典格式，其中鍵是角色ID，值是角色數據
-                    for char_data in data.values():
-                        characters.append(Character.from_dict(char_data))
+                logger.info(f"讀取角色文件: {file_name}")
+                
+                # 處理default_characters.json特殊情況
+                if file_name == 'default_characters.json':
+                    if isinstance(data, dict):
+                        for char_id, char_data in data.items():
+                            if not 'id' in char_data:
+                                char_data['id'] = char_id
+                            characters.append(Character.from_dict(char_data))
                 else:
-                    # 單個角色數據
+                    # 處理單個角色文件
+                    if not 'id' in data:
+                        data['id'] = os.path.splitext(file_name)[0]
                     characters.append(Character.from_dict(data))
                 
             except Exception as e:
@@ -64,47 +70,66 @@ class CharacterService:
         
         return characters
     
-    def get_character(self, name: str) -> Character:
-        """獲取指定名稱的角色。
+    def get_character(self, char_id: str) -> Character:
+        """獲取指定ID的角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             
         Returns:
             角色實例
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
         """
-        logger.info(f"嘗試獲取角色: {name}")
+        logger.info(f"嘗試獲取角色: {char_id}")
+        
         # 首先嘗試從單獨的角色文件中獲取
-        single_file_path = os.path.join(self.characters_path, f"{name.lower()}.json")
+        single_file_path = os.path.join(self.characters_path, f"{char_id}.json")
         if self.storage.file_exists(single_file_path):
             try:
                 data = json.loads(self.storage.read_file(single_file_path))
+                if not 'id' in data:
+                    data['id'] = char_id
                 return Character.from_dict(data)
-            except Exception:
-                logger.warning(f"讀取單獨角色文件失敗: {single_file_path}")
-                pass
-
+            except Exception as e:
+                logger.warning(f"讀取角色文件失敗: {single_file_path} - {str(e)}")
+        
         # 如果單獨文件不存在或讀取失敗，嘗試從default_characters.json中獲取
         default_file_path = os.path.join(self.characters_path, "default_characters.json")
         if self.storage.file_exists(default_file_path):
             try:
                 data = json.loads(self.storage.read_file(default_file_path))
-                logger.info(f"從default_characters.json讀取: {list(data.keys()) if isinstance(data, dict) else '非字典數據'}")
+                logger.info(f"從default_characters.json讀取的數據類型: {type(data)}")
+                logger.info(f"尋找的角色ID: {char_id}")
+                
                 # 檢查是否是字典格式
                 if isinstance(data, dict):
-                    for char_id, char_data in data.items():
-                        if char_id.lower() == name.lower() or char_data.get('name', '').lower() == name.lower():
+                    # 首先嘗試直接匹配ID
+                    if char_id in data:
+                        char_data = data[char_id]
+                        if not 'id' in char_data:
+                            char_data['id'] = char_id
+                        logger.info(f"找到角色: {char_data.get('name', 'unknown')}")
+                        return Character.from_dict(char_data)
+                    
+                    # 如果找不到，嘗試用小寫名稱匹配ID
+                    for existing_id, char_data in data.items():
+                        if char_data.get('name', '').lower() == char_id.lower():
+                            if not 'id' in char_data:
+                                char_data['id'] = existing_id
+                            logger.info(f"通過名稱找到角色: {char_data.get('name', 'unknown')}")
                             return Character.from_dict(char_data)
-            except Exception:
-                pass
+                    
+                    logger.warning(f"在default_characters.json中找不到角色ID或名稱: {char_id}")
+                else:
+                    logger.error("default_characters.json的數據格式不正確")
+            except Exception as e:
+                logger.error(f"讀取default_characters.json失敗: {str(e)}")
         
-        error_msg = name
-        logger.error(error_msg)
+        logger.error(f"找不到角色 {char_id}")
         logger.error(f"已搜索路徑: {single_file_path}, {default_file_path}")
-        raise NotFoundError("character", name)
+        raise NotFoundError("character", char_id)
     
     def create_character(self, character_data: Dict[str, Any]) -> Character:
         """創建新角色。
@@ -121,6 +146,10 @@ class CharacterService:
         # 驗證角色數據
         self._validate_character_data(character_data)
         
+        # 確保有ID
+        if 'id' not in character_data:
+            character_data['id'] = character_data['name'].lower()
+        
         # 創建角色實例
         character = Character.from_dict(character_data)
         
@@ -129,22 +158,25 @@ class CharacterService:
         
         return character
     
-    def update_character(self, name: str, character_data: Dict[str, Any]) -> Character:
+    def update_character(self, char_id: str, character_data: Dict[str, Any]) -> Character:
         """更新角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             character_data: 角色數據字典
             
         Returns:
             更新後的角色實例
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
             ValidationError: 如果角色數據無效
         """
         # 檢查角色是否存在
-        existing_character = self.get_character(name)
+        existing_character = self.get_character(char_id)
+        
+        # 確保ID匹配
+        character_data['id'] = char_id
         
         # 驗證角色數據
         self._validate_character_data(character_data)
@@ -157,20 +189,20 @@ class CharacterService:
         
         return updated_character
     
-    def delete_character(self, name: str) -> None:
+    def delete_character(self, char_id: str) -> None:
         """刪除角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
         """
         # 檢查角色是否存在
-        self.get_character(name)
+        self.get_character(char_id)
         
         # 刪除角色文件
-        file_path = os.path.join(self.characters_path, f"{name.lower()}.json")
+        file_path = os.path.join(self.characters_path, f"{char_id}.json")
         self.storage.delete_file(file_path)
     
     def _save_character(self, character: Character) -> None:
@@ -179,7 +211,7 @@ class CharacterService:
         Args:
             character: 角色實例
         """
-        file_path = os.path.join(self.characters_path, f"{character.name.lower()}.json")
+        file_path = os.path.join(self.characters_path, f"{character.id}.json")
         self.storage.write_file(file_path, json.dumps(character.to_dict(), ensure_ascii=False, indent=2))
     
     def _validate_character_data(self, data: Dict[str, Any]) -> None:
@@ -212,10 +244,9 @@ class CharacterService:
             if not isinstance(data['relationships'], dict):
                 raise ValidationError("關係必須是字典")
             
-            for name, value in data['relationships'].items():
+            for char_id, value in data['relationships'].items():
                 if not isinstance(value, int):
-                    raise ValidationError(f"關係值必須是整數: {name}")
-
+                    raise ValidationError(f"關係值必須是整數: {char_id}")
 
 class CharacterManager:
     """角色管理器類，提供角色管理功能。"""
@@ -245,19 +276,19 @@ class CharacterManager:
         """
         return self.character_service.get_all_characters()
     
-    def get_character(self, name: str) -> Character:
-        """獲取指定名稱的角色。
+    def get_character(self, char_id: str) -> Character:
+        """獲取指定ID的角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             
         Returns:
             角色實例
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
         """
-        return self.character_service.get_character(name)
+        return self.character_service.get_character(char_id)
     
     def create_character(self, character_data: Dict[str, Any]) -> Character:
         """創建新角色。
@@ -273,32 +304,32 @@ class CharacterManager:
         """
         return self.character_service.create_character(character_data)
     
-    def update_character(self, name: str, character_data: Dict[str, Any]) -> Character:
+    def update_character(self, char_id: str, character_data: Dict[str, Any]) -> Character:
         """更新角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             character_data: 角色數據字典
             
         Returns:
             更新後的角色實例
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
             ValidationError: 如果角色數據無效
         """
-        return self.character_service.update_character(name, character_data)
+        return self.character_service.update_character(char_id, character_data)
     
-    def delete_character(self, name: str) -> None:
+    def delete_character(self, char_id: str) -> None:
         """刪除角色。
         
         Args:
-            name: 角色名稱
+            char_id: 角色ID
             
         Raises:
-            NotFoundError: 如果找不到指定名稱的角色
+            NotFoundError: 如果找不到指定ID的角色
         """
-        self.character_service.delete_character(name)
+        self.character_service.delete_character(char_id)
     
     def load_default_characters(self) -> List[Character]:
         """載入預設角色。
@@ -310,6 +341,7 @@ class CharacterManager:
         # 預設角色數據
         default_characters = [
             {
+                "id": "1",
                 "name": "Yuki",
                 "personality": "冷靜、理性、聰明，但有時顯得有些疏離。她喜歡閱讀和思考，對世界充滿好奇。",
                 "dialogue_style": "說話簡潔有力，用詞精確，偶爾會使用一些學術性詞彙。",
@@ -319,6 +351,7 @@ class CharacterManager:
                 "orientation": "異性戀"
             },
             {
+                "id": "2",
                 "name": "Rei",
                 "personality": "熱情、活潑、開朗，喜歡冒險和挑戰。她對生活充滿熱情，總是能給周圍的人帶來歡樂。",
                 "dialogue_style": "說話活潑生動，經常使用口語化表達和感嘆詞，喜歡開玩笑。",
@@ -328,6 +361,7 @@ class CharacterManager:
                 "orientation": "雙性戀"
             },
             {
+                "id": "3",
                 "name": "Akira",
                 "personality": "神秘、內向、敏感，有著豐富的內心世界。他喜歡音樂和藝術，對美有著獨特的感受力。",
                 "dialogue_style": "說話溫柔而含蓄，經常使用比喻和隱喻，有時會突然陷入沉思。",
@@ -343,17 +377,17 @@ class CharacterManager:
         for data in default_characters:
             try:
                 # 檢查角色是否已存在
-                char_name = data['name']
+                char_id = data['id']
                 try:
-                    logger.info(f"檢查角色是否存在: {char_name}")
-                    character = self.get_character(char_name)
+                    logger.info(f"檢查角色是否存在: {char_id}")
+                    character = self.get_character(char_id)
                     characters.append(character)
                 except NotFoundError:
                     # 如果不存在，則創建新角色
-                    logger.info(f"創建新角色: {char_name}")
+                    logger.info(f"創建新角色: {char_id}")
                     character = self.create_character(data)
                     characters.append(character)
             except Exception as e:
-                logger.error(f"載入預設角色 {char_name} 時出錯: {str(e)}")
+                logger.error(f"載入預設角色 {char_id} 時出錯: {str(e)}")
         
         return characters

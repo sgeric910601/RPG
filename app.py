@@ -17,12 +17,12 @@ from backend.services.ai.base import AIServiceFactory, ModelManager
 from backend.core.prompt import PromptManager, PromptEnhancer
 from backend.utils.error import handle_error, NotFoundError, ServiceError
 
-# 角色名稱映射（中文到英文）
+# 角色名稱到ID的映射
 CHARACTER_NAME_MAPPING = {
-    "雪": "Yuki",
-    "怜": "Rei",
-    "明": "Akira",
-    "晶": "Yuki"  # 添加新的映射
+    "雪": "1",   # Yuki的ID
+    "怜": "2",   # Rei的ID
+    "明": "3",   # Akira的ID
+    "晶": "1"    # 映射到Yuki的ID
 }
 
 # 設置日誌
@@ -105,18 +105,18 @@ def emit_message(message: str, character_data: Dict, is_chunk: bool = True, sid:
         'is_chunk': is_chunk
     }, room=sid)
 
-def get_character_name(name: str) -> str:
-    """獲取角色的標準名稱。
+def get_character_id(name: str) -> str:
+    """獲取角色的標準ID。
 
     Args:
         name: 輸入的角色名稱
     Returns:
         標準化的角色名稱
     """
-    mapped_name = CHARACTER_NAME_MAPPING.get(name)
-    if mapped_name:
-        logger.info(f"映射角色名稱: {name} -> {mapped_name}")
-    return mapped_name or name
+    mapped_id = CHARACTER_NAME_MAPPING.get(name)
+    if mapped_id:
+        logger.info(f"映射角色ID: {name} -> {mapped_id}")
+    return mapped_id or name
 
 # 初始化管理器
 logger.info("正在初始化管理器...")
@@ -243,9 +243,9 @@ def handle_message(data):
         if not character_name:
             raise ValueError("無效的角色名稱")
             
-        # 轉換角色名稱
+        # 轉換角色ID
         original_name = character_name
-        character_name = get_character_name(character_name)
+        character_name = get_character_id(character_name)
         logger.info(f"[WebSocket] 標準化角色名稱: {character_name} (原始名稱: {original_name})")
             
         # 保存當前的sid

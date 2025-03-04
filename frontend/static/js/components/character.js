@@ -43,7 +43,9 @@ class CharacterManager {
         if (!character) return;
 
         // 更新立繪
-        this.characterImageElement.style.backgroundImage = `url(${character.image})`;
+        if (character.image) {
+            this.characterImageElement.style.backgroundImage = `url(${character.image})`;
+        }
         
         // 更新名稱
         this.characterNameElement.textContent = character.name;
@@ -89,7 +91,7 @@ class CharacterManager {
             </div>
             <div class="stat-item">
                 <label>好感度：</label>
-                <span>${character.affection}</span>
+                <span>${character.affection || 0}</span>
             </div>
             ${character.traits ? `
             <div class="stat-item">
@@ -125,44 +127,61 @@ class CharacterManager {
 
     /**
      * 更新角色列表
-     * @param {Array} characters - 角色列表
+     * @param {Object} charactersData - 角色列表數據
      */
-    updateCharacterList(characters) {
+    updateCharacterList(charactersData) {
         if (!this.characterListElement) return;
+        console.log('更新角色列表，收到數據:', charactersData);  // 調試日誌
 
-        const characterListHtml = Object.entries(characters).map(([name, char]) => `
-            <div class="character-card" data-character-name="${name}">
-                <div class="character-avatar" style="background-image: url(${char.image})"></div>
-                <div class="character-info">
-                    <h5>${char.name}</h5>
-                    <p>${char.personality}</p>
+        if (!charactersData || !charactersData.data || !charactersData.data.characters) {
+            console.error('無效的角色數據格式');
+            return;
+        }
+
+        const characters = charactersData.data.characters;
+        console.log('處理角色數據:', characters);  // 調試日誌
+
+        const characterListHtml = Object.entries(characters).map(([id, char]) => {
+            console.log('處理角色:', id, char);  // 調試日誌
+            return `
+                <div class="character-card" data-character-id="${id}">
+                    <div class="character-avatar" style="background-image: url(${char.image})"></div>
+                    <div class="character-info">
+                        <h5>${char.name}</h5>
+                        <p>${char.personality}</p>
+                    </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
+        console.log('生成的HTML:', characterListHtml);  // 調試日誌
         this.characterListElement.innerHTML = characterListHtml;
 
         // 添加點擊事件監聽
         this.characterListElement.querySelectorAll('.character-card').forEach(card => {
             card.addEventListener('click', () => {
-                const characterName = card.dataset.characterName;
-                this.selectCharacter(characterName);
+                const characterId = card.dataset.characterId;
+                console.log('選擇角色:', characterId);  // 調試日誌
+                this.selectCharacter(characterId);
             });
         });
     }
 
     /**
      * 選擇角色
-     * @param {string} characterName - 角色名稱
+     * @param {string} characterId - 角色ID
      */
-    async selectCharacter(characterName) {
+    async selectCharacter(characterId) {
         try {
-            const response = await fetch(`/api/characters/${characterName}`);
+            console.log('正在請求角色數據:', characterId);  // 調試日誌
+            const response = await fetch(`/api/characters/${characterId}`);
             const data = await response.json();
             
             if (data.status === 'success') {
-                gameState.set('currentCharacter', data.data.character);
-                eventManager.emit('character:selected', data.data.character);
+                const character = data.data.character;
+                console.log('收到角色數據:', character);  // 調試日誌
+                gameState.set('currentCharacter', character);
+                eventManager.emit('character:selected', character);
             } else {
                 console.error('選擇角色失敗:', data.message);
             }

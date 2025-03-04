@@ -1,5 +1,6 @@
 // 導入依賴
 import { gameState } from './core/state.js';
+import { characterManager } from './components/character.js';
 
 /**
  * 初始化通用功能
@@ -9,11 +10,40 @@ class App {
         this.init();
     }
 
-    init() {
+    async init() {
         this.initTooltips();
         this.initResizeHandler();
         this.initMessageHandler();
         this.initModals();
+        await this.loadCharacterList();
+    }
+
+    /**
+     * 載入角色列表
+     */
+    async loadCharacterList() {
+        try {
+            console.log('開始載入角色列表');  // 調試日誌
+            const response = await fetch('/api/characters/');
+            const data = await response.json();
+            console.log('收到角色數據:', data);  // 調試日誌
+            
+            if (data.status === 'success') {
+                characterManager.updateCharacterList(data);
+            } else {
+                console.error('載入角色列表失敗:', data.message);
+                this.showSystemMessage({ 
+                    message: '載入角色列表失敗', 
+                    type: 'error' 
+                });
+            }
+        } catch (error) {
+            console.error('載入角色列表時出錯:', error);
+            this.showSystemMessage({ 
+                message: '載入角色列表時發生錯誤', 
+                type: 'error' 
+            });
+        }
     }
 
     /**
@@ -97,5 +127,6 @@ class App {
 
 // 當 DOM 加載完成後初始化應用
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM 加載完成，初始化應用');  // 調試日誌
     new App();
 });

@@ -1,52 +1,4 @@
-/* 角色立繪區域 */
-.character-portrait {
-    position: relative;
-    height: 100%;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-}
-
-.character-image {
-    flex: 1;
-    background-size: contain;
-    background-position: center;
-    background-repeat: no-repeat;
-    border-radius: 10px;
-    min-height: 300px;
-}
-
-.character-info {
-    margin-top: 1rem;
-    text-align: center;
-}
-
-.character-name {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
-}
-
-/* 好感度顯示 */
-.affection-meter {
-    text-align: center;
-    margin: 0.5rem 0;
-}
-
-.hearts {
-    display: inline-block;
-}
-
-.hearts .fa-heart {
-    color: #ddd;
-    margin: 0 2px;
-    transition: color 0.3s ease;
-}
-
-.hearts .fa-heart.filled {
-    color: #ff4d6d;
-}
-
-/* 角色管理列表 */
+/* 角色列表容器 */
 .character-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -54,38 +6,80 @@
     padding: 1rem;
 }
 
+/* 角色卡片 */
 .character-card {
-    border: 1px solid var(--theme-color);
-    border-radius: 10px;
-    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: transform 0.2s, box-shadow 0.2s;
 }
 
 .character-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* 角色頭像 */
 .character-avatar {
-    width: 100px;
-    height: 100px;
-    margin: 0 auto;
-    border-radius: 50%;
+    width: 100%;
+    height: 200px;
     background-size: cover;
     background-position: center;
-    border: 2px solid var(--theme-color);
+    background-repeat: no-repeat;
+    border-bottom: 1px solid #eee;
 }
 
-/* 角色統計面板 */
-.character-stats {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+/* 角色信息 */
+.character-info {
     padding: 1rem;
 }
 
-.stat-item {
-    margin: 0.5rem 0;
-    display: flex;
-    justify-content: space-between;
+.character-info h5 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
+    color: #333;
+}
+
+.character-info p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #666;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 選中狀態 */
+.character-card.selected {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+/* 角色創建按鈕 */
+.character-create {
+    text-align: center;
+    padding: 1rem;
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+    .character-list {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+    
+    .character-avatar {
+        height: 150px;
+    }
+    
+    .character-info h5 {
+        font-size: 1rem;
+    }
+    
+    .character-info p {
+        font-size: 0.8rem;
+    }
 }

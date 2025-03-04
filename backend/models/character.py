@@ -8,6 +8,7 @@ from dataclasses import dataclass, field, asdict
 class Character:
     """角色數據類，表示遊戲中的角色。"""
     
+    id: str
     name: str
     personality: str
     dialogue_style: str
@@ -37,6 +38,7 @@ class Character:
             創建的角色實例
         """
         return cls(
+            id=data['id'],
             name=data['name'],
             personality=data['personality'],
             dialogue_style=data['dialogue_style'],
