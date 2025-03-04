@@ -141,11 +141,13 @@ app.register_blueprint(api_bp)
 @app.route('/')
 def index():
     """渲染主頁面."""
+    models = model_manager.get_all_models()
     server_config = {
         'host': os.getenv('HOST', '0.0.0.0'),
         'port': int(os.getenv('PORT', 5000))
     }
-    return render_template('index.html', server_config=server_config)
+    return render_template('index.html', server_config=server_config,
+                         models=models)
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
@@ -153,7 +155,7 @@ def get_models():
     try:
         models = model_manager.get_all_models()
         
-        # 按照提供商分組模型
+        # 按照提供商分組模型並添加詳細信息
         logger.info(f"找到以下模型: {list(models.keys())}")
         
         grouped_models = {
@@ -165,16 +167,18 @@ def get_models():
         }
         
         for model_id, model_info in models.items():
-            provider = model_info.get('api_type', 'openai')
+            provider = model_info.get('api_type', 'unknow')  # 獲取API類型
+            model_name = model_info.get('name', model_id)    # 獲取模型名稱
+            model_desc = model_info.get('description', '')   # 獲取模型描述
             
-            # 根據模型ID和api_type進行分組
-            if 'gpt-4' in model_id and provider == 'openai':
-                grouped_models['gpt4'].append(model_id)
-            elif 'vision' in model_id and provider == 'openai':
-                grouped_models['openai_vision'].append(model_id)
-            elif provider in grouped_models:
-                if model_id not in grouped_models[provider]:
-                    grouped_models[provider].append(model_id)
+            # 創建包含詳細信息的模型標識符
+            model_display = f"{model_name} - {model_desc}"
+
+            # 將模型添加到對應的分組中
+            if provider in grouped_models:
+                # 檢查是否已經添加過相同ID的模型
+                if not any(item.get("id") == model_id for item in grouped_models[provider]):
+                    grouped_models[provider].append({"id": model_id, "display": model_display})
             else:
                 logger.warning(f"未知的模型提供商: {provider}, model_id: {model_id}")
         

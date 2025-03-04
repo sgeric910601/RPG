@@ -5,7 +5,7 @@ import tiktoken
 import asyncio
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 
-from openai import AsyncOpenAI
+from openai import OpenAI
 from ...utils.error import ServiceError
 from .base import AIService
 
@@ -25,13 +25,13 @@ class OpenAIService(AIService):
         if not self.api_key:
             raise ServiceError("openai", "Missing API key")
         
-        self.client = AsyncOpenAI(
+        self.client = OpenAI(
             api_key=self.api_key,
             organization=self.organization if self.organization else None
         )
         
         # 默認模型
-        self.default_model = "gpt-4"
+        self.default_model = "gpt-4o-mini"
     
     def set_model(self, model_id: str) -> bool:
         """設置當前使用的模型。
@@ -42,7 +42,7 @@ class OpenAIService(AIService):
         Returns:
             設置是否成功
         """
-        supported_models = ["gpt-4", "gpt-3.5-turbo", "gpt-4-vision-preview"]
+        supported_models = ["gpt-4o-mini"]
         if model_id in supported_models:
             self.default_model = model_id
             logger.info(f"[OpenAI] 設置當前模型: {model_id}")
@@ -117,7 +117,7 @@ class OpenAIService(AIService):
         """
         model = model or self.default_model
         try:
-            stream = await self.client.chat.completions.create(
+            stream = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
@@ -126,11 +126,12 @@ class OpenAIService(AIService):
                 **kwargs
             )
             
-            async for chunk in stream:
-                content = chunk.choices[0].delta.content
+            for chunk in stream:
+                content = chunk.choices[0].delta.content if hasattr(chunk.choices[0].delta, 'content') else None
                 if content is not None:
                     yield content
         except Exception as e:
+            logger.error(f"[OpenAI] 生成流式響應時出錯: {str(e)}")
             raise ServiceError("openai", f"Failed to generate stream response: {str(e)}")
     
     async def generate_response(
@@ -231,9 +232,9 @@ class OpenAIService(AIService):
             "description": "OpenAI API服務，提供GPT系列模型",
             "models": [
                 {
-                    "id": "gpt-4",
-                    "name": "GPT-4",
-                    "description": "OpenAI最強大的模型",
+                    "id": "gpt-4o-mini",
+                    "name": "gpt-4o-mini",
+                    "description": "OpenAI的模型",
                     "max_tokens": 8192,
                     "supports_images": False
                 }

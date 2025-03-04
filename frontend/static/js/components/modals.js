@@ -460,8 +460,8 @@ class ModalManager {
                         optgroup.label = 'OpenAI 模型';
                         data.data.models.openai.forEach(model => {
                             const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
+                            option.value = model.id;
+                            option.textContent = model.display || model.id;
                             optgroup.appendChild(option);
                         });
                         modelSelect.appendChild(optgroup);
@@ -473,8 +473,8 @@ class ModalManager {
                         optgroup.label = 'Claude 模型';
                         data.data.models.claude.forEach(model => {
                             const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
+                            option.value = model.id;
+                            option.textContent = model.display || model.id;
                             optgroup.appendChild(option);
                         });
                         modelSelect.appendChild(optgroup);
@@ -486,8 +486,8 @@ class ModalManager {
                         optgroup.label = 'OpenRouter 模型';
                         data.data.models.openrouter.forEach(model => {
                             const option = document.createElement('option');
-                            option.value = model;
-                            option.textContent = model;
+                            option.value = model.id;
+                            option.textContent = model.display || model.id;
                             optgroup.appendChild(option);
                         });
                         modelSelect.appendChild(optgroup);
