@@ -454,44 +454,32 @@ class ModalManager {
                     // 清空現有選項
                     modelSelect.innerHTML = '';
                     
-                    // 添加OpenAI模型
-                    if (data.data.models.openai && data.data.models.openai.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'OpenAI 模型';
-                        data.data.models.openai.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model.id;
-                            option.textContent = model.display || model.id;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
+                    // 自動處理所有API提供者的模型
+                    const models = data.data.models;
                     
-                    // 添加Claude模型
-                    if (data.data.models.claude && data.data.models.claude.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'Claude 模型';
-                        data.data.models.claude.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model.id;
-                            option.textContent = model.display || model.id;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
+                    // 獲取所有API提供者
+                    const providers = Object.keys(models);
                     
-                    // 添加OpenRouter模型
-                    if (data.data.models.openrouter && data.data.models.openrouter.length > 0) {
-                        const optgroup = document.createElement('optgroup');
-                        optgroup.label = 'OpenRouter 模型';
-                        data.data.models.openrouter.forEach(model => {
-                            const option = document.createElement('option');
-                            option.value = model.id;
-                            option.textContent = model.display || model.id;
-                            optgroup.appendChild(option);
-                        });
-                        modelSelect.appendChild(optgroup);
-                    }
+                    // 為每個提供者創建一個選項組
+                    providers.forEach(provider => {
+                        if (models[provider] && models[provider].length > 0) {
+                            const optgroup = document.createElement('optgroup');
+                            
+                            // 格式化提供者名稱 (首字母大寫)
+                            const providerName = provider.charAt(0).toUpperCase() + provider.slice(1);
+                            optgroup.label = `${providerName} 模型`;
+                            
+                            // 添加該提供者的所有模型
+                            models[provider].forEach(model => {
+                                const option = document.createElement('option');
+                                option.value = model.id;
+                                option.textContent = model.display || model.id;
+                                optgroup.appendChild(option);
+                            });
+                            
+                            modelSelect.appendChild(optgroup);
+                        }
+                    });
                     
                     // 設置當前選中的模型
                     const currentSettings = gameState.get('settings');

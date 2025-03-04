@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 from openai import OpenAI
 from ...utils.error import ServiceError
-from .base import AIService
+from .base import AIService, ModelManager
 
 class OpenAIService(AIService):
     """OpenAI服務實現類，提供與OpenAI API的交互功能。"""
@@ -33,8 +33,34 @@ class OpenAIService(AIService):
             organization=self.organization if self.organization else None
         )
         
-        # 默認模型
-        self.default_model = "gpt-4o-mini"
+        # 從配置文件加載模型信息
+        self.model_manager = ModelManager()
+        self.models = self._load_models()
+        
+        # 設置默認模型
+        self.default_model = self._get_default_model()
+        logger.info(f"[OpenAI] 初始化完成，使用默認模型: {self.default_model}")
+    
+    def _load_models(self) -> Dict[str, Dict[str, Any]]:
+        """從配置文件加載OpenAI模型信息。"""
+        all_models = self.model_manager.get_all_models()
+        return {
+            model_id: model_info
+            for model_id, model_info in all_models.items()
+            if model_info.get('api_type') == 'openai' and model_info.get('enabled', True)
+        }
+    
+    def _get_default_model(self) -> str:
+        """獲取默認模型ID。"""
+        if not self.models:
+            return "gpt-4o-mini"  # 如果沒有配置模型，使用默認值
+        
+        # 返回第一個可用模型的ID
+        model_id = next(iter(self.models.keys()))
+        # 從完整ID (如 "openai/gpt-4o-mini") 中提取模型名稱部分
+        if '/' in model_id:
+            return model_id.split('/')[-1]
+        return model_id
     
     def set_model(self, model_id: str) -> bool:
         """設置當前使用的模型。
@@ -45,11 +71,20 @@ class OpenAIService(AIService):
         Returns:
             設置是否成功
         """
-        supported_models = ["gpt-4o-mini"]
-        if model_id in supported_models:
-            self.default_model = model_id
+        # 檢查模型ID是否在配置中
+        if model_id in self.models:
+            # 直接使用配置中的ID
+            self.default_model = model_id.split('/')[-1] if '/' in model_id else model_id
             logger.info(f"[OpenAI] 設置當前模型: {model_id}")
             return True
+        
+        # 檢查是否是短名稱 (不包含提供商前綴)
+        for full_id in self.models.keys():
+            if full_id.endswith('/' + model_id) or full_id == model_id:
+                self.default_model = model_id
+                logger.info(f"[OpenAI] 設置當前模型: {model_id}")
+                return True
+                
         logger.warning(f"[OpenAI] 不支持的模型: {model_id}")
         return False
     
@@ -230,18 +265,31 @@ class OpenAIService(AIService):
         Returns:
             模型信息，包括名稱、描述、能力等
         """
+        # 從配置文件獲取模型信息
+        models_list = []
+        for model_id, model_info in self.models.items():
+            models_list.append({
+                "id": model_id,
+                "name": model_info.get('name', model_id),
+                "description": model_info.get('description', ''),
+                "max_tokens": model_info.get('max_tokens', 8192),
+                "supports_images": model_info.get('supports_images', False)
+            })
+        
+        # 如果沒有配置模型，使用默認值
+        if not models_list:
+            models_list = [{
+                "id": "gpt-4o-mini",
+                "name": "gpt-4o-mini",
+                "description": "OpenAI的模型",
+                "max_tokens": 8192,
+                "supports_images": False
+            }]
+        
         return {
             "name": "OpenAI",
             "description": "OpenAI API服務，提供GPT系列模型",
-            "models": [
-                {
-                    "id": "gpt-4o-mini",
-                    "name": "gpt-4o-mini",
-                    "description": "OpenAI的模型",
-                    "max_tokens": 8192,
-                    "supports_images": False
-                }
-            ],
+            "models": models_list,
             "capabilities": [
                 "text_generation",
                 "chat"

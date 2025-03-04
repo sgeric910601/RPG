@@ -1,7 +1,7 @@
 """測試OpenRouter服務."""
 
 import os
-from backend.services.openrouter_service import OpenRouterService
+from backend.services.ai import OpenRouterService
 from dotenv import load_dotenv
 
 def main():

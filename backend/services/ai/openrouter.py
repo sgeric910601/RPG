@@ -8,26 +8,13 @@ import logging
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 
 from ...utils.error import ServiceError
-from .base import AIService
+from .base import AIService, ModelManager
 
 # 設置日誌
 logger = logging.getLogger(__name__)
 
 class OpenRouterService(AIService):
     """OpenRouter服務實現類，提供與OpenRouter API的交互功能。"""
-    
-    # 支持的模型列表
-    SUPPORTED_MODELS = [
-        "deepseek/deepseek-chat:free",
-        "anthropic/claude-3-opus:free",
-        "anthropic/claude-3-sonnet:free",
-        "anthropic/claude-3-haiku:free",
-        "google/gemini-pro:free",
-        "meta-llama/llama-3-70b-instruct:free",
-        "meta-llama/llama-3-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free",
-        "mistralai/mixtral-8x7b-instruct:free"
-    ]
     
     def __init__(self, api_key: Optional[str] = None, referer: str = "http://localhost:5000"):
         """初始化OpenRouter服務。
@@ -44,10 +31,61 @@ class OpenRouterService(AIService):
         self.base_url = "https://openrouter.ai/api/v1"
         self.referer = referer
         
-        # 默認模型
-        self.default_model = "deepseek/deepseek-chat:free"
+        # 從配置文件加載模型信息
+        self.model_manager = ModelManager()
+        self.models = self._load_models()
+        self.supported_models = self._get_supported_models()
+        
+        # 設置默認模型
+        self.default_model = self._get_default_model()
         
         logger.info(f"[OpenRouter] 初始化完成, API Key: {self.api_key[:8]}...")
+    
+    def _load_models(self) -> Dict[str, Dict[str, Any]]:
+        """從配置文件加載OpenRouter模型信息。"""
+        all_models = self.model_manager.get_all_models()
+        return {
+            model_id: model_info
+            for model_id, model_info in all_models.items()
+            if model_info.get('api_type') == 'openrouter' and model_info.get('enabled', True)
+        }
+    
+    def _get_supported_models(self) -> List[str]:
+        """獲取支持的模型列表。"""
+        if not self.models:
+            # 如果沒有配置模型，使用默認值
+            return [
+                "deepseek/deepseek-chat:free",
+                "anthropic/claude-3-opus:free",
+                "anthropic/claude-3-sonnet:free",
+                "anthropic/claude-3-haiku:free",
+                "google/gemini-pro:free"
+            ]
+        
+        # 從配置中提取模型ID
+        model_ids = []
+        for model_id in self.models.keys():
+            # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+            if '/' in model_id:
+                provider, model_name = model_id.split('/', 1)
+                model_ids.append(f"{model_name}:free")
+            else:
+                model_ids.append(f"{model_id}:free")
+        
+        return model_ids
+    
+    def _get_default_model(self) -> str:
+        """獲取默認模型ID。"""
+        if not self.models:
+            return "deepseek/deepseek-chat:free"  # 如果沒有配置模型，使用默認值
+        
+        # 返回第一個可用模型的ID
+        model_id = next(iter(self.models.keys()))
+        # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+        if '/' in model_id:
+            provider, model_name = model_id.split('/', 1)
+            return f"{model_name}:free"
+        return f"{model_id}:free"
     
     def set_model(self, model_id: str) -> bool:
         """設置當前使用的模型。
@@ -57,13 +95,31 @@ class OpenRouterService(AIService):
         Returns:
             設置是否成功
         """
-        if model_id in self.SUPPORTED_MODELS:
+        # 檢查完整模型ID (包含:free後綴)
+        if model_id in self.supported_models:
             self.default_model = model_id
             logger.info(f"[OpenRouter] 設置當前模型: {model_id}")
             return True
-        else:
-            logger.warning(f"[OpenRouter] 不支持的模型: {model_id}")
-            return False
+        
+        # 檢查是否是短名稱 (不包含:free後綴)
+        for full_id in self.supported_models:
+            if full_id.startswith(model_id):
+                self.default_model = full_id
+                logger.info(f"[OpenRouter] 設置當前模型: {full_id}")
+                return True
+        
+        # 檢查是否是配置中的ID
+        for config_id in self.models.keys():
+            # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+            if '/' in config_id:
+                provider, model_name = config_id.split('/', 1)
+                if model_id == config_id or model_id == model_name:
+                    self.default_model = f"{model_name}:free"
+                    logger.info(f"[OpenRouter] 設置當前模型: {self.default_model}")
+                    return True
+        
+        logger.warning(f"[OpenRouter] 不支持的模型: {model_id}")
+        return False
     
     def generate_text(self, prompt: str, **kwargs) -> str:
         """同步生成文本響應。
@@ -94,7 +150,7 @@ class OpenRouterService(AIService):
         temperature = kwargs.get("temperature", 0.7)
         max_tokens = kwargs.get("max_tokens", 500)
         
-        if model not in self.SUPPORTED_MODELS:
+        if model not in self.supported_models:
             logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
             model = self.default_model
         
@@ -157,7 +213,7 @@ class OpenRouterService(AIService):
             生成的文本片段
         """
         model = model or self.default_model
-        if model not in self.SUPPORTED_MODELS:
+        if model not in self.supported_models:
             logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
             model = self.default_model
             
@@ -295,10 +351,20 @@ class OpenRouterService(AIService):
         Returns:
             模型信息，包括名稱、描述、能力等
         """
-        return {
-            "name": "OpenRouter",
-            "description": "OpenRouter API服務，提供多種AI模型的統一接口",
-            "models": [
+        # 從配置文件獲取模型信息
+        models_list = []
+        for model_id, model_info in self.models.items():
+            models_list.append({
+                "id": model_id,
+                "name": model_info.get('name', model_id),
+                "description": model_info.get('description', ''),
+                "max_tokens": model_info.get('max_tokens', 4096),
+                "supports_images": model_info.get('supports_images', False)
+            })
+        
+        # 如果沒有配置模型，使用默認值
+        if not models_list:
+            models_list = [
                 {
                     "id": "deepseek/deepseek-chat:free",
                     "name": "DeepSeek Chat",
@@ -312,15 +378,13 @@ class OpenRouterService(AIService):
                     "description": "Anthropic的最強大模型",
                     "max_tokens": 4096,
                     "supports_images": False
-                },
-                {
-                    "id": "anthropic/claude-3-sonnet:free",
-                    "name": "Claude 3 Sonnet",
-                    "description": "Anthropic的平衡模型",
-                    "max_tokens": 4096,
-                    "supports_images": False
                 }
-            ],
+            ]
+        
+        return {
+            "name": "OpenRouter",
+            "description": "OpenRouter API服務，提供多種AI模型的統一接口",
+            "models": models_list,
             "capabilities": [
                 "text_generation",
                 "chat"
