@@ -4,6 +4,9 @@ import os
 import tiktoken
 import asyncio
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
+import logging
+
+logger = logging.getLogger(__name__)
 
 from openai import OpenAI
 from ...utils.error import ServiceError
