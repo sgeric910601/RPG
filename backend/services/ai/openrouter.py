@@ -232,43 +232,78 @@ class OpenRouterService(AIService):
             "Content-Type": "application/json"
         }
         
-        try:
-            logger.info(f"[OpenRouter] 發送流式請求: {model}")
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=request_data,
-                    timeout=60.0
-                ) as response:
-                    if response.status_code != 200:
-                        error_text = await response.text()
-                        raise ServiceError("openrouter", f"API error: {error_text}")
-                    
-                    logger.info("[OpenRouter] 開始接收流式回應...")
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            line = line[6:]
-                            
-                            if not line or line == "[DONE]":
-                                continue
+        # 設置重試參數
+        max_retries = 3
+        retry_delay = 1  # 初始延遲1秒
+        request_timeout = kwargs.get("timeout", 60.0)  # 默認超時60秒
+        
+        # 移除可能導致問題的參數
+        if "timeout" in kwargs:
+            del kwargs["timeout"]
+        
+        # 重試邏輯
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"[OpenRouter] 嘗試生成流式響應 (嘗試 {attempt+1}/{max_retries}), 模型: {model}")
+                
+                async with httpx.AsyncClient() as client:
+                    async with client.stream(
+                        "POST",
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=request_data,
+                        timeout=request_timeout
+                    ) as response:
+                        if response.status_code != 200:
+                            error_text = await response.text()
+                            raise ServiceError("openrouter", f"API error: {error_text}")
+                        
+                        logger.info("[OpenRouter] 開始接收流式回應...")
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: "):
+                                line = line[6:]
                                 
-                            try:
-                                chunk = json.loads(line)
-                                content = chunk["choices"][0]["delta"].get("content")
-                                if content:
-                                    logger.debug(f"[OpenRouter] 收到片段: {content}")
-                                    yield content
-                            except json.JSONDecodeError:
-                                logger.warning(f"[OpenRouter] JSON解析錯誤: {line}")
-                                continue
-                    
-                    logger.info("[OpenRouter] 流式回應完成")
-                    
-        except Exception as e:
-            logger.error(f"[OpenRouter] 生成流式回應出錯: {str(e)}")
-            raise ServiceError("openrouter", f"Failed to generate stream response: {str(e)}")
+                                if not line or line == "[DONE]":
+                                    continue
+                                    
+                                try:
+                                    chunk = json.loads(line)
+                                    content = chunk["choices"][0]["delta"].get("content")
+                                    if content:
+                                        logger.debug(f"[OpenRouter] 收到片段: {content}")
+                                        yield content
+                                except json.JSONDecodeError:
+                                    logger.warning(f"[OpenRouter] JSON解析錯誤: {line}")
+                                    continue
+                        
+                        logger.info("[OpenRouter] 流式回應完成")
+                
+                # 如果成功完成，跳出重試循環
+                break
+                
+            except Exception as e:
+                # 記錄錯誤
+                error_type = type(e).__name__
+                error_msg = str(e)
+                logger.error(f"[OpenRouter] 生成流式回應出錯 ({error_type}): {error_msg}")
+                
+                # 如果是最後一次嘗試，拋出異常
+                if attempt == max_retries - 1:
+                    # 如果是連接錯誤，提供更具體的錯誤信息
+                    if "Connection" in error_msg or "timeout" in error_msg.lower():
+                        raise ServiceError("openrouter", f"Connection error: Failed to connect to OpenRouter API after {max_retries} attempts. Please check your network connection and API status.")
+                    else:
+                        raise ServiceError("openrouter", f"Failed to generate stream response: {error_msg}")
+                
+                # 否則等待後重試
+                wait_time = retry_delay * (2 ** attempt)  # 指數退避策略
+                logger.info(f"[OpenRouter] 等待 {wait_time} 秒後重試...")
+                await asyncio.sleep(wait_time)
+                
+                # 如果是超時錯誤，增加超時時間
+                if "timeout" in error_msg.lower():
+                    request_timeout *= 1.5  # 增加50%的超時時間
+                    logger.info(f"[OpenRouter] 增加超時時間至 {request_timeout} 秒")
     
     async def generate_response(
         self, 

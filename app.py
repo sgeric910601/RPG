@@ -51,9 +51,9 @@ socketio = SocketIO(
     async_mode='eventlet',
     ping_timeout=60,
     ping_interval=25,
-    logger=True,
+    logger=False,
     path='socket.io',
-    engineio_logger=True
+    engineio_logger=False
 )
 
 def format_error(e: Exception) -> str:

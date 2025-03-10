@@ -56,6 +56,14 @@ class DialogueManager {
             sender: 'user'
         });
 
+        // 添加"輸入中..."的臨時消息
+        this.addMessage({
+            content: '輸入中...',
+            sender: 'assistant',
+            character: character,
+            is_typing: true
+        });
+
         // 清空輸入框
         this.messageInput.value = '';
     }
@@ -85,19 +93,31 @@ class DialogueManager {
      * @param {Object} messageData - 消息數據
      */
     addMessage(messageData) {
-        const { content, sender, character, is_chunk } = messageData;
+        const { content, sender, character, is_chunk, is_typing } = messageData;
         
-        // 如果是流式回應的第一個片段，創建新的消息容器
-        if (sender === 'assistant' && !is_chunk) {
+        // 如果是新的助手回覆，移除之前的"輸入中..."消息
+        if (sender === 'assistant' && !is_chunk && !is_typing) {
+            const lastMessage = this.dialogueContainer.lastElementChild;
+            if (lastMessage && lastMessage.classList.contains('assistant-message') && 
+                lastMessage.classList.contains('typing-message')) {
+                lastMessage.remove();
+            }
+        }
+
+        // 如果是流式回應的片段，更新現有消息而不是創建新消息
+        if (sender === 'assistant' && is_chunk) {
             const lastMessage = this.dialogueContainer.lastElementChild;
             if (lastMessage && lastMessage.classList.contains('assistant-message')) {
-                lastMessage.querySelector('.message-content').textContent = content;
+                const contentElement = lastMessage.querySelector('.message-content');
+                // 追加內容而不是替換
+                contentElement.textContent += content;
                 return;
             }
         }
 
+
         const messageElement = document.createElement('div');
-        messageElement.className = `message ${sender}-message`;
+        messageElement.className = `message ${sender}-message${is_typing ? ' typing-message' : ''}`;
         
         const contentElement = document.createElement('div');
         contentElement.className = 'message-content';

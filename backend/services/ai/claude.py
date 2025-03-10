@@ -3,6 +3,7 @@
 import os
 import base64
 import anthropic
+import asyncio
 import logging
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 
@@ -15,6 +16,18 @@ logger = logging.getLogger(__name__)
 class ClaudeService(AIService):
     """Claude服務實現類，提供與Anthropic Claude API的交互功能。"""
     
+    def __del__(self):
+        """在對象被銷毀時確保資源被正確釋放。"""
+        try:
+            if hasattr(self, 'client'):
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(self.client.close())
+                else:
+                    loop.run_until_complete(self.client.close())
+        except Exception as e:
+            logger.warning(f"[Claude] 關閉客戶端時出錯: {str(e)}")
+    
     def __init__(self, api_key: Optional[str] = None):
         """初始化Claude服務。
         
@@ -26,7 +39,11 @@ class ClaudeService(AIService):
         if not self.api_key:
             raise ServiceError("claude", "Missing API key")
         
-        self.client = anthropic.AsyncAnthropic(api_key=self.api_key)
+        # 初始化客戶端，移除不必要的transport配置
+        self.client = anthropic.AsyncAnthropic(
+            api_key=self.api_key,
+            max_retries=3  # 設置重試次數
+        )
         
         # 從配置文件加載模型信息
         self.model_manager = ModelManager()
@@ -144,27 +161,59 @@ class ClaudeService(AIService):
         Yields:
             生成的文本片段
         """
-        try:
-            model = model or self.default_model
-            logger.info(f"[Claude] 開始生成流式回應，使用模型: {model}")
-            
-            with await self.client.messages.stream(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens or 2048,
-                **kwargs
-            ) as stream:
-                async for chunk in stream:
-                    if chunk.type == "content_block_delta":
-                        logger.debug(f"[Claude] 收到片段: {chunk.delta.text[:50]}...")
-                        yield chunk.delta.text
+        model = model or self.default_model
+        logger.info(f"[Claude] 開始生成流式回應，使用模型: {model}")
+        
+        # 設置重試參數
+        max_retries = 3
+        retry_delay = 1  # 初始延遲1秒
+        timeout = kwargs.get("timeout", 60.0)  # 默認超時60秒
+        
+        # 移除可能導致問題的參數
+        if "timeout" in kwargs:
+            del kwargs["timeout"]
+        
+        # 重試邏輯
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"[Claude] 嘗試生成流式響應 (嘗試 {attempt+1}/{max_retries})")
                 
-                logger.info("[Claude] 流式回應完成")
+                # 創建流式響應
+                async with self.client.messages.stream(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens or 2048,
+                    **kwargs
+                ) as stream:
+                    async for chunk in stream:
+                        if chunk.type == "content_block_delta":
+                            logger.debug(f"[Claude] 收到片段: {chunk.delta.text[:50]}...")
+                            yield chunk.delta.text
+                    
+                    logger.info("[Claude] 流式回應完成")
                 
-        except Exception as e:
-            logger.error(f"[Claude] 生成流式回應出錯: {str(e)}")
-            raise ServiceError("claude", f"Failed to generate stream response: {str(e)}")
+                # 如果成功完成，跳出重試循環
+                break
+                
+            except Exception as e:
+                # 記錄錯誤
+                error_type = type(e).__name__
+                error_msg = str(e)
+                logger.error(f"[Claude] 生成流式回應時出錯 ({error_type}): {error_msg}")
+                
+                # 如果是最後一次嘗試，拋出異常
+                if attempt == max_retries - 1:
+                    # 如果是連接錯誤，提供更具體的錯誤信息
+                    if "Connection" in error_msg or "timeout" in error_msg.lower():
+                        raise ServiceError("claude", f"Connection error: Failed to connect to Anthropic API after {max_retries} attempts. Please check your network connection and API status.")
+                    else:
+                        raise ServiceError("claude", f"Failed to generate stream response: {error_msg}")
+                
+                # 否則等待後重試
+                wait_time = retry_delay * (2 ** attempt)  # 指數退避策略
+                logger.info(f"[Claude] 等待 {wait_time} 秒後重試...")
+                await asyncio.sleep(wait_time)
     
     async def generate_response(
         self,

@@ -121,9 +121,22 @@
     50% { opacity: 0; }
 }
 
-.typing::after {
-    content: '|';
-    animation: blink 1s infinite;
+@keyframes dotAnimation {
+    0%, 100% { content: "..."; }
+    25% { content: "."; }
+    50% { content: ".."; }
+    75% { content: "..."; }
+}
+
+.typing-message .message-content {
+    opacity: 0.8;
+}
+
+.typing-message .message-content::after {
+    content: "...";
+    animation: dotAnimation 1.5s infinite;
+    display: inline-block;
+    margin-left: 2px;
 }
 
 /* 消息淡入動畫 */

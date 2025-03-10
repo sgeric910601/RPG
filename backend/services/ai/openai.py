@@ -3,6 +3,7 @@
 import os
 import tiktoken
 import asyncio
+import time
 from typing import Dict, List, Optional, Any, Union, AsyncGenerator
 import logging
 
@@ -154,23 +155,87 @@ class OpenAIService(AIService):
             流式響應生成器
         """
         model = model or self.default_model
-        try:
-            stream = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-                **kwargs
+        # 設置重試參數
+        max_retries = 3
+        retry_delay = 1  # 初始延遲1秒
+        timeout = kwargs.get("timeout", 60.0)  # 默認超時60秒
+        
+        # 移除可能導致問題的參數
+        if "timeout" in kwargs:
+            del kwargs["timeout"]
+        
+        last_error = None
+        base_timeout = timeout
+
+        # 重試邏輯
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"[OpenAI] 嘗試生成流式響應 (嘗試 {attempt+1}/{max_retries})")
+                
+                # 使用動態timeout參數創建流
+                stream = await self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                    timeout=timeout,
+                    **kwargs
+                )
+                
+                # 處理流式響應
+                async for chunk in stream:
+                    if chunk and chunk.choices:
+                        content = chunk.choices[0].delta.content if hasattr(chunk.choices[0].delta, 'content') else None
+                        if content is not None:
+                            yield content
+                
+                # 如果成功完成，跳出重試循環
+                logger.info("[OpenAI] 流式響應生成成功")
+                return
+                
+            except Exception as e:
+                last_error = e
+                error_type = type(e).__name__
+                error_msg = str(e)
+                logger.error(f"[OpenAI] 生成流式響應時出錯 ({error_type}): {error_msg}")
+                
+                # 如果不是最後一次嘗試，進行重試
+                if attempt < max_retries - 1:
+                    wait_time = retry_delay * (2 ** attempt)  # 指數退避策略
+                    logger.info(f"[OpenAI] 等待 {wait_time} 秒後重試...")
+                    await asyncio.sleep(wait_time)
+                    
+                    # 根據錯誤類型調整重試策略
+                    if "timeout" in error_msg.lower():
+                        timeout = base_timeout * (1.5 ** (attempt + 1))  # 每次重試增加50%超時時間
+                        logger.info(f"[OpenAI] 增加超時時間至 {timeout} 秒")
+                    elif "rate" in error_msg.lower():  # 處理速率限制
+                        wait_time *= 2  # 速率限制情況下等待更長時間
+                        logger.info(f"[OpenAI] 遇到速率限制，增加等待時間至 {wait_time} 秒")
+                    elif "Connection" in error_msg:
+                        # 連接錯誤時檢查網絡
+                        logger.warning("[OpenAI] 檢測到連接問題，請確認網絡連接正常")
+                        
+        # 所有重試都失敗後，拋出最後一個錯誤
+        error_msg = str(last_error)
+        if "Connection" in error_msg:
+            raise ServiceError(
+                "openai",
+                f"Connection error: Failed to connect to OpenAI API after {max_retries} attempts. "
+                "Please check:\n"
+                "1. Your network connection\n"
+                "2. OpenAI API status\n"
+                "3. Any VPN or proxy settings"
             )
-            
-            for chunk in stream:
-                content = chunk.choices[0].delta.content if hasattr(chunk.choices[0].delta, 'content') else None
-                if content is not None:
-                    yield content
-        except Exception as e:
-            logger.error(f"[OpenAI] 生成流式響應時出錯: {str(e)}")
-            raise ServiceError("openai", f"Failed to generate stream response: {str(e)}")
+        elif "timeout" in error_msg.lower():
+            raise ServiceError(
+                "openai", 
+                f"Request timeout after {max_retries} attempts with maximum timeout of {timeout} seconds. "
+                "The API is currently experiencing high latency."
+            )
+        else:
+            raise ServiceError("openai", f"Failed to generate stream response after {max_retries} attempts: {error_msg}")
     
     async def generate_response(
         self,
