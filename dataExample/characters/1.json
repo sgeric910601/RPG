@@ -1,0 +1,12 @@
+{
+    "id": "1",
+    "name": "Yuki",
+    "personality": "冷靜、理性、聰明，但有時顯得有些疏離。她喜歡閱讀和思考，對世界充滿好奇。",
+    "dialogue_style": "說話簡潔有力，用詞精確，偶爾會使用一些學術性詞彙。",
+    "image": "/static/images/characters/yuki.png",
+    "background": "Yuki是一名大學生，主修物理學。她喜歡探索宇宙的奧秘，夢想成為一名科學家。",
+    "traits": ["聰明", "理性", "好奇心強"],
+    "affection": 0,
+    "relationships": {},
+    "orientation": "異性戀"
+}

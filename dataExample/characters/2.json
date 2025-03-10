@@ -1,0 +1,12 @@
+{
+    "id": "2",
+    "name": "Rei",
+    "personality": "熱情、活潑、開朗，喜歡冒險和挑戰。她對生活充滿熱情，總是能給周圍的人帶來歡樂。",
+    "dialogue_style": "說話活潑生動，經常使用口語化表達和感嘆詞，喜歡開玩笑。",
+    "image": "/static/images/characters/rei.png",
+    "background": "Rei是一名自由攝影師，喜歡旅行和探險。她的作品曾在多個雜誌上發表。",
+    "traits": ["熱情", "勇敢", "樂觀"],
+    "affection": 0,
+    "relationships": {},
+    "orientation": "雙性戀"
+}

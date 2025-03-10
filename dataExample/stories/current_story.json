@@ -1,0 +1,102 @@
+{
+  "story": {
+    "world_type": "fantasy",
+    "setting": "創建奇幻世界觀",
+    "background": "在一個充滿魔法的世界中，有一所專門培養魔法師的學院。這裡不僅有來自各地的天才學生，還有許多不為人知的秘密。你作為一名新入學的學生，即將展開一段奇幻的冒險。",
+    "characters": {
+      "yuki": {
+        "name": "yuki",
+        "personality": "傲嬌",
+        "dialogue_style": "說話時經常口是心非，但內心其實很溫柔",
+        "image": "/static/images/characters/yuki.png",
+        "affection": 0,
+        "background": "來自古老的忍者家族，但對傳統規範感到束縛。喜歡現代流行文化，常常偷偷看漫畫和追劇。",
+        "traits": [
+          "傲嬌",
+          "聰明",
+          "固執",
+          "害羞"
+        ],
+        "relationships": {},
+        "orientation": "泛性戀"
+      },
+      "akira": {
+        "name": "akira",
+        "personality": "開朗活潑",
+        "dialogue_style": "說話充滿活力，經常使用流行語和可愛表情",
+        "image": "/static/images/characters/akira.png",
+        "affection": 0,
+        "background": "大學遊戲設計系的學生，夢想是製作一款能感動人心的遊戲。個性開朗，很容易與人成為朋友。",
+        "traits": [
+          "活潑",
+          "創意",
+          "善解人意",
+          "樂觀"
+        ],
+        "relationships": {},
+        "orientation": "雙性戀"
+      },
+      "rei": {
+        "name": "rei",
+        "personality": "神秘冷酷",
+        "dialogue_style": "說話簡短直接，偶爾會說出意味深長的話",
+        "image": "/static/images/characters/rei.png",
+        "affection": 0,
+        "background": "身份成謎的特殊能力者，似乎在尋找什麼重要的事物。雖然表面冷漠，但其實很關心身邊的人。",
+        "traits": [
+          "神秘",
+          "聰明",
+          "保護慾強",
+          "孤獨"
+        ],
+        "relationships": {},
+        "orientation": "全性戀"
+      }
+    },
+    "current_scene": "introduction",
+    "adult_content": false,
+    "themes": [
+      "魔法",
+      "友情",
+      "成長",
+      "冒險"
+    ],
+    "custom_rules": {},
+    "events": []
+  },
+  "dialogue_history": [
+    {
+      "speaker": "user",
+      "content": "與 akira 對話"
+    },
+    {
+      "speaker": "akira",
+      "content": "你好！我很高興見到你。我們可以聊聊天嗎？"
+    },
+    {
+      "speaker": "user",
+      "content": "這裡的環境真不錯呢"
+    },
+    {
+      "speaker": "akira",
+      "content": "你好！我很高興見到你。我們可以聊聊天嗎？"
+    },
+    {
+      "speaker": "user",
+      "content": "你想知道更多關於我的事嗎？"
+    },
+    {
+      "speaker": "akira",
+      "content": "你好！我很高興見到你。我們可以聊聊天嗎？"
+    },
+    {
+      "speaker": "user",
+      "content": "你想知道更多關於我的事嗎？"
+    },
+    {
+      "speaker": "akira",
+      "content": "你好！我很高興見到你。我們可以聊聊天嗎？"
+    }
+  ],
+  "current_session_id": null
+}

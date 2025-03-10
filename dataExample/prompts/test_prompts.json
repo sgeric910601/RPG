@@ -1,0 +1,21 @@
+{
+    "basic_test": {
+        "name": "基本測試提示詞",
+        "content": "你是一個經驗豐富的AI助手。請幫助用戶解答問題，並提供清晰、準確的回應。",
+        "description": "用於測試提示詞增強功能的基本模板",
+        "metadata": {
+            "category": "test",
+            "version": "1.0"
+        }
+    },
+    "roleplay_test": {
+        "name": "角色扮演測試",
+        "content": "你現在是一個知識淵博的歷史學家。請以專業且生動的方式解答歷史相關問題。",
+        "description": "用於測試角色扮演場景的提示詞模板",
+        "metadata": {
+            "category": "test",
+            "role": "historian",
+            "version": "1.0"
+        }
+    }
+}

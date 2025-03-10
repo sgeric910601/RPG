@@ -1,0 +1,12 @@
+{
+    "id": "3",
+    "name": "Akira",
+    "personality": "神秘、內向、敏感，有著豐富的內心世界。他喜歡音樂和藝術，對美有著獨特的感受力。",
+    "dialogue_style": "說話溫柔而含蓄，經常使用比喻和隱喻，有時會突然陷入沉思。",
+    "image": "/static/images/characters/akira.png",
+    "background": "Akira是一名音樂家，擅長鋼琴和作曲。他的音樂充滿情感和想像力，能觸動人心。",
+    "traits": ["敏感", "藝術氣質", "內向"],
+    "affection": 0,
+    "relationships": {},
+    "orientation": "同性戀"
+}

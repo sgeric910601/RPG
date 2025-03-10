@@ -1,0 +1,24 @@
+{
+  "id": "ce9f937d-c0e3-434e-97e9-4a42b0fb3c2f",
+  "character_id": "1",
+  "character_name": "Yuki",
+  "story_id": "current_story",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你好",
+      "timestamp": "2025-03-04T10:55:25.114764",
+      "character_id": null,
+      "character_name": null
+    },
+    {
+      "role": "assistant",
+      "content": "對不起，AI服務暫時不可用。請檢查您的API密鑰設置。",
+      "timestamp": "2025-03-04T10:55:25.115521",
+      "character_id": "1",
+      "character_name": "Yuki"
+    }
+  ],
+  "created_at": "2025-03-04T01:06:55.739643",
+  "updated_at": "2025-03-04T10:55:25.115533"
+}
