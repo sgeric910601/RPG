@@ -145,32 +145,48 @@ class AIServiceFactory:
     
     _services: Dict[str, AIService] = {}
     _default_service: Optional[str] = None
+    _api_types: Dict[str, str] = {}  # 映射 api_type 到服務名稱
     
     @classmethod
-    def register_service(cls, name: str, service: AIService) -> None:
+    def register_service(cls, name: str, service: AIService, api_type: str) -> None:
         """註冊AI服務。
         
         Args:
             name: 服務名稱
             service: 服務實例
+            api_type: API類型（如 'openai', 'claude', 'openrouter'）
         """
         cls._services[name] = service
-        if cls._default_service is None:
+        cls._api_types[api_type] = name
+        
+        # 如果是OpenRouter，設為默認服務
+        if api_type == 'openrouter':
+            cls._default_service = name
+            logger.info(f"[AIServiceFactory] 設置默認服務為: {name} (OpenRouter)")
+        elif cls._default_service is None:
             cls._default_service = name
     
     @classmethod
-    def get_service(cls, name: Optional[str] = None) -> Optional[AIService]:
+    def get_service(cls, api_type: Optional[str] = None) -> Optional[AIService]:
         """獲取AI服務。
         
         Args:
-            name: 服務名稱，如果為None則返回默認服務
+            api_type: API類型，如果為None則返回默認服務
             
         Returns:
             服務實例，如果不存在則返回None
         """
-        if name is None and cls._default_service is not None:
+        if api_type:
+            service_name = cls._api_types.get(api_type)
+            if service_name:
+                logger.info(f"[AIServiceFactory] 使用API類型 {api_type} 的服務: {service_name}")
+                return cls._services.get(service_name)
+            
+        if cls._default_service:
+            logger.info(f"[AIServiceFactory] 使用默認服務: {cls._default_service}")
             return cls._services.get(cls._default_service)
-        return cls._services.get(name) if name else None
+            
+        return None
     
     @classmethod
     def list_services(cls) -> List[str]:
@@ -297,7 +313,10 @@ class ModelManager:
         Returns:
             模型信息字典，如果不存在則返回None
         """
-        return self.models.get(model_id)
+        model_info = self.models.get(model_id)
+        if model_info:
+            logger.info(f"[ModelManager] 獲取模型信息: {model_id} (api_type={model_info.get('api_type')})")
+        return model_info
     
     def get_default_model(self) -> Optional[str]:
         """獲取默認模型ID。
@@ -305,13 +324,20 @@ class ModelManager:
         Returns:
             默認模型ID，如果沒有則返回None
         """
-        # 獲取所有可用模型
-        available_models = self.get_all_models()
-        if not available_models:
-            return None
+        # 優先選擇OpenRouter模型
+        for model_id, model_info in self.get_all_models().items():
+            if model_info.get('api_type') == 'openrouter':
+                logger.info(f"[ModelManager] 選擇默認OpenRouter模型: {model_id}")
+                return model_id
         
-        # 返回第一個可用模型的ID
-        return next(iter(available_models.keys()))
+        # 如果沒有OpenRouter模型，返回第一個可用模型
+        available_models = self.get_all_models()
+        if available_models:
+            model_id = next(iter(available_models.keys()))
+            logger.info(f"[ModelManager] 選擇默認模型: {model_id}")
+            return model_id
+        
+        return None
     
     def set_model(self, model_id: str) -> bool:
         """設置當前使用的模型。
@@ -323,24 +349,26 @@ class ModelManager:
             設置是否成功
         """
         # 檢查模型是否存在
-        if model_id not in self.models:
+        model_info = self.get_model(model_id)
+        if not model_info:
             logger.warning("[ModelManager] 模型不存在: %s", model_id)
             return False
         
         # 檢查模型是否啟用
-        if not self.models[model_id].get('enabled', True):
+        if not model_info.get('enabled', True):
             logger.warning("[ModelManager] 模型未啟用: %s", model_id)
             return False
         
-        # 獲取AI服務
-        ai_service = AIServiceFactory.get_service()
+        # 獲取對應的AI服務
+        api_type = model_info.get('api_type')
+        ai_service = AIServiceFactory.get_service(api_type)
         if not ai_service:
-            logger.error("[ModelManager] 無法獲取AI服務")
+            logger.error(f"[ModelManager] 無法獲取API類型為 {api_type} 的服務")
             return False
         
         # 設置模型
         try:
-            logger.info("[ModelManager] 設置當前模型: %s", model_id)
+            logger.info(f"[ModelManager] 設置當前模型: {model_id} (api_type={api_type})")
             ai_service.set_model(model_id)
             return True
         except Exception as e:

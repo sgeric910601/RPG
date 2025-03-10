@@ -8,6 +8,7 @@ class DialogueManager {
         this.choiceContainer = document.querySelector('.choice-container');
         this.messageForm = document.getElementById('message-form');
         this.messageInput = document.getElementById('message-input');
+        this.currentStreamMessage = null;
         
         this.initEventListeners();
     }
@@ -23,9 +24,73 @@ class DialogueManager {
             });
         }
 
+        // 監聽一般消息
         socketManager.on('receive_message', (data) => {
+            console.log('[DialogueManager] 收到消息:', data);
             this.handleServerMessage(data);
         });
+
+        // 監聽流式回應開始
+        socketManager.on('stream_start', (data) => {
+            console.log('[DialogueManager] 流式響應開始:', data);
+            this.handleStreamStart(data);
+        });
+
+        // 監聽流式數據片段
+        socketManager.on('stream_data', (data) => {
+            console.log('[DialogueManager] 流式數據片段:', data);
+            this.handleStreamData(data);
+        });
+
+        // 監聽流式回應結束
+        socketManager.on('stream_end', (data) => {
+            console.log('[DialogueManager] 流式響應結束:', data);
+            this.handleStreamEnd(data);
+        });
+    }
+
+    /**
+     * 處理流式回應開始
+     * @param {Object} data - 開始數據
+     */
+    handleStreamStart(data) {
+        // 移除之前的"輸入中..."消息
+        const lastMessage = this.dialogueContainer.lastElementChild;
+        if (lastMessage && lastMessage.classList.contains('typing-message')) {
+            lastMessage.remove();
+        }
+
+        // 創建新的消息元素用於流式內容
+        this.currentStreamMessage = this.createMessageElement({
+            content: '',
+            sender: 'assistant',
+            character: data.character
+        });
+        this.dialogueContainer.appendChild(this.currentStreamMessage);
+    }
+
+    /**
+     * 處理流式數據片段
+     * @param {Object} data - 數據片段
+     */
+    handleStreamData(data) {
+        if (!this.currentStreamMessage) {
+            return;
+        }
+
+        const contentElement = this.currentStreamMessage.querySelector('.message-content');
+        if (contentElement) {
+            contentElement.textContent += data.content;
+            this.scrollToBottom();
+        }
+    }
+
+    /**
+     * 處理流式回應結束
+     * @param {Object} data - 結束數據
+     */
+    handleStreamEnd(data) {
+        this.currentStreamMessage = null;
     }
 
     /**
@@ -45,10 +110,7 @@ class DialogueManager {
         }
         
         // 發送消息到服務器
-        socketManager.send('send_message', {
-            message: message,
-            character: character.id  // 使用角色ID
-        });
+        socketManager.sendMessage(message, character.id);
 
         // 添加用戶消息到界面
         this.addMessage({
@@ -73,19 +135,50 @@ class DialogueManager {
      * @param {Object} data - 消息數據
      */
     handleServerMessage(data) {
+        console.log('[DialogueManager] 處理消息:', { type: data.type, isChunk: data.is_chunk });
+        
         if (data.status === 'error') {
             this.showError(data.message);
             return;
         }
 
         if (data.message) {
-            this.addMessage({
-                content: data.message,
-                sender: 'assistant',
-                character: data.character,
-                is_chunk: data.is_chunk
-            });
+            // 如果不是流式響應，則直接添加消息
+            if (!data.is_chunk) {
+                this.addMessage({
+                    content: data.message,
+                    sender: 'assistant',
+                    character: data.character
+                });
+            }
         }
+    }
+
+    /**
+     * 創建消息元素
+     * @param {Object} messageData - 消息數據
+     * @returns {HTMLElement} 消息元素
+     */
+    createMessageElement(messageData) {
+        const { content, sender, character, is_typing } = messageData;
+        
+        const messageElement = document.createElement('div');
+        messageElement.className = `message ${sender}-message${is_typing ? ' typing-message' : ''}`;
+        
+        // 如果是角色消息，添加角色信息
+        if (sender === 'assistant' && character) {
+            const nameElement = document.createElement('div');
+            nameElement.className = 'message-sender';
+            nameElement.textContent = character.name;
+            messageElement.appendChild(nameElement);
+        }
+        
+        const contentElement = document.createElement('div');
+        contentElement.className = 'message-content';
+        contentElement.textContent = content;
+        messageElement.appendChild(contentElement);
+        
+        return messageElement;
     }
 
     /**
@@ -93,46 +186,17 @@ class DialogueManager {
      * @param {Object} messageData - 消息數據
      */
     addMessage(messageData) {
-        const { content, sender, character, is_chunk, is_typing } = messageData;
+        const { is_typing } = messageData;
         
         // 如果是新的助手回覆，移除之前的"輸入中..."消息
-        if (sender === 'assistant' && !is_chunk && !is_typing) {
+        if (messageData.sender === 'assistant' && !is_typing) {
             const lastMessage = this.dialogueContainer.lastElementChild;
-            if (lastMessage && lastMessage.classList.contains('assistant-message') && 
-                lastMessage.classList.contains('typing-message')) {
+            if (lastMessage && lastMessage.classList.contains('typing-message')) {
                 lastMessage.remove();
             }
         }
 
-        // 如果是流式回應的片段，更新現有消息而不是創建新消息
-        if (sender === 'assistant' && is_chunk) {
-            const lastMessage = this.dialogueContainer.lastElementChild;
-            if (lastMessage && lastMessage.classList.contains('assistant-message')) {
-                const contentElement = lastMessage.querySelector('.message-content');
-                // 追加內容而不是替換
-                contentElement.textContent += content;
-                return;
-            }
-        }
-
-
-        const messageElement = document.createElement('div');
-        messageElement.className = `message ${sender}-message${is_typing ? ' typing-message' : ''}`;
-        
-        const contentElement = document.createElement('div');
-        contentElement.className = 'message-content';
-        contentElement.textContent = content;
-        
-        messageElement.appendChild(contentElement);
-        
-        // 如果是角色消息，添加角色信息
-        if (sender === 'assistant' && character) {
-            const nameElement = document.createElement('div');
-            nameElement.className = 'message-sender';
-            nameElement.textContent = character.name;
-            messageElement.insertBefore(nameElement, contentElement);
-        }
-        
+        const messageElement = this.createMessageElement(messageData);
         this.dialogueContainer.appendChild(messageElement);
         this.scrollToBottom();
     }
