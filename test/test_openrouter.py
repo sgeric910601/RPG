@@ -1,10 +1,11 @@
 """測試OpenRouter服務."""
 
 import os
+import asyncio
 from backend.services.ai import OpenRouterService
 from dotenv import load_dotenv
 
-def main():
+async def main():
     """主測試函數."""
     # 載入環境變量
     load_dotenv()
@@ -27,10 +28,15 @@ def main():
         print(f"用戶提示: {user_prompt}")
         
         # 測試生成
-        response = service.generate_response(
-            prompt=user_prompt,
-            system_prompt=system_prompt,
-            model="deepseek/deepseek-chat:free"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        response = await service.generate_chat_response(
+            messages=messages,
+            model="qwen/qwq-32b:free",
+            stream=False
         )
         
         print("\n測試成功!")
@@ -45,4 +51,4 @@ def main():
         print("3. 網絡連接是否正常")
         
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

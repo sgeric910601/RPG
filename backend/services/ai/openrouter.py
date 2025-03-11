@@ -55,7 +55,7 @@ class OpenRouterService(AIService):
         if not self.models:
             # 如果沒有配置模型，使用默認值
             return [
-                "deepseek/deepseek-chat:free",
+                "qwen/qwq-32b:free",
                 "anthropic/claude-3-opus:free",
                 "anthropic/claude-3-sonnet:free",
                 "anthropic/claude-3-haiku:free",
@@ -65,7 +65,7 @@ class OpenRouterService(AIService):
         # 從配置中提取模型ID
         model_ids = []
         for model_id in self.models.keys():
-            # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+            # 從完整ID (如 "openrouter/qwen-chat") 中提取模型名稱部分
             if '/' in model_id:
                 provider, model_name = model_id.split('/', 1)
                 model_ids.append(f"{model_name}:free")
@@ -77,11 +77,11 @@ class OpenRouterService(AIService):
     def _get_default_model(self) -> str:
         """獲取默認模型ID。"""
         if not self.models:
-            return "deepseek/deepseek-chat:free"  # 如果沒有配置模型，使用默認值
+            return "qwen/qwq-32b:free"  # 如果沒有配置模型，使用默認值
         
         # 返回第一個可用模型的ID
         model_id = next(iter(self.models.keys()))
-        # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+        # 從完整ID (如 "openrouter/qwen-chat") 中提取模型名稱部分
         if '/' in model_id:
             provider, model_name = model_id.split('/', 1)
             return f"{model_name}:free"
@@ -110,7 +110,7 @@ class OpenRouterService(AIService):
         
         # 檢查是否是配置中的ID
         for config_id in self.models.keys():
-            # 從完整ID (如 "openrouter/deepseek-chat") 中提取模型名稱部分
+            # 從完整ID (如 "openrouter/qwen-chat") 中提取模型名稱部分
             if '/' in config_id:
                 provider, model_name = config_id.split('/', 1)
                 if model_id == config_id or model_id == model_name:
@@ -150,9 +150,8 @@ class OpenRouterService(AIService):
         temperature = kwargs.get("temperature", 0.7)
         max_tokens = kwargs.get("max_tokens", 500)
         
-        if model not in self.supported_models:
-            logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
-            model = self.default_model
+        # 使用原始模型ID
+        model = model or self.default_model
         
         request_data = {
             "model": model,
@@ -212,10 +211,8 @@ class OpenRouterService(AIService):
         Yields:
             生成的文本片段
         """
+        # 使用原始模型ID
         model = model or self.default_model
-        if model not in self.supported_models:
-            logger.warning(f"[OpenRouter] 不支援的模型 {model}, 使用默認模型 {self.default_model}")
-            model = self.default_model
             
         request_data = {
             "model": model,
@@ -401,9 +398,9 @@ class OpenRouterService(AIService):
         if not models_list:
             models_list = [
                 {
-                    "id": "deepseek/deepseek-chat:free",
-                    "name": "DeepSeek Chat",
-                    "description": "DeepSeek的對話模型",
+                    "id": "qwen/qw-32b:free",
+                    "name": "Qwen",
+                    "description": "Qwen 32B chat model",
                     "max_tokens": 4096,
                     "supports_images": False
                 },
@@ -434,7 +431,7 @@ class OpenRouterService(AIService):
         """
         return self.api_key is not None
     
-    def count_tokens(self, text: str, model: str = "deepseek/deepseek-chat:free") -> int:
+    def count_tokens(self, text: str, model: str = "qwen/qw-32b:free") -> int:
         """計算文本的token數量。
         
         Args:
